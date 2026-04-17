@@ -598,6 +598,7 @@ const { useState, useEffect, useMemo, useCallback, useRef } = React;
 const INITIAL_DATA = [{"id": 1, "name": "胡地", "unitPrice": 37, "qty": 1, "cost": 37, "sells": [{"id": "s1", "qty": 1, "unitPrice": 71.66, "total": 71.66}], "status": "已售出", "source": "自己收的", "profit": 34.66, "imageUrl": "cardimg/151C-189.png"}, {"id": 2, "name": "超梦tt", "unitPrice": 25, "qty": 2, "cost": 0, "sells": [], "status": "未售出", "source": "自己收的", "imageUrl": "cardimg/CSM2bC-034.png", "profit": null}, {"id": 3, "name": "超梦tt", "unitPrice": 22, "qty": 2, "cost": 0, "sells": [], "status": "未售出", "source": "自己收的", "imageUrl": "cardimg/CSM2bC-034.png", "profit": null}, {"id": 4, "name": "超梦tt sr", "unitPrice": 0, "qty": 1, "cost": 0, "sells": [{"id": "s1", "qty": 1, "unitPrice": 150.0, "total": 150.0}], "status": "已售出", "source": "自己收的", "imageUrl": "cardimg/CSM2bC-164.png", "profit": 150.0}, {"id": 5, "name": "暴击蚊", "unitPrice": 60, "qty": 1, "cost": 60, "sells": [{"id": "s1", "qty": 1, "unitPrice": 100, "total": 100}], "status": "待签收", "source": "自己收的", "imageUrl": "cardimg/CSM2bC-158.png", "profit": 40}, {"id": 6, "name": "梦幻ex sar", "unitPrice": 623, "qty": 1, "cost": 623, "sells": [{"id": "s1", "qty": 1, "unitPrice": 785.6, "total": 785.6}], "status": "已售出", "source": "自己收的", "imageUrl": "cardimg/151C-191.png", "profit": 162.6}, {"id": 7, "name": "梦幻ex sar", "unitPrice": 578, "qty": 1, "cost": 578, "sells": [{"id": "s1", "qty": 1, "unitPrice": 900.0, "total": 900.0}], "status": "已售出", "source": "自己收的", "imageUrl": "cardimg/151C-191.png", "profit": 322.0}, {"id": 8, "name": "连击熊", "unitPrice": 335, "qty": 1, "cost": 335, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 9, "name": "洛奇亚", "unitPrice": 618, "qty": 1, "cost": 618, "sells": [{"id": "s1", "qty": 1, "unitPrice": 800.0, "total": 800.0}], "status": "已售出", "source": "自己收的", "imageUrl": "cardimg/CS6aC-146.png", "profit": 182.0}, {"id": 10, "name": "mega 灾兽", "unitPrice": 80, "qty": 1, "cost": 80, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 11, "name": "太阳tt", "unitPrice": 232, "qty": 1, "cost": 232, "sells": [{"id": "s1", "qty": 1, "unitPrice": 250.0, "total": 250.0}], "status": "已售出", "source": "自己收的", "imageUrl": "cardimg/CSM2bC-167.png", "profit": 18.0}, {"id": 12, "name": "线条伊布x9", "unitPrice": 2199, "qty": 1, "cost": 2199, "sells": [{"id": "s1", "qty": 1, "unitPrice": 3896.48, "total": 3896.48}], "status": "已售出", "source": "自己收的", "profit": 1697.48}, {"id": 13, "name": "线条皮卡丘", "unitPrice": 135, "qty": 1, "cost": 135, "sells": [{"id": "s1", "qty": 1, "unitPrice": 800.0, "total": 800.0}], "status": "已售出", "source": "自己收的", "profit": 665.0}, {"id": 14, "name": "胡地", "unitPrice": 38, "qty": 1, "cost": 38, "sells": [], "status": "未售出", "source": "自己收的", "profit": null, "imageUrl": "cardimg/151C-189.png"}, {"id": 15, "name": "龙柱v rr", "unitPrice": 2.3, "qty": 2, "cost": 4.6, "sells": [], "status": "未售出", "source": "自己收的", "imageUrl": "cardimg/CS6.5C-054.png", "profit": null}, {"id": 16, "name": "龙柱vs rrr", "unitPrice": 11.5, "qty": 4, "cost": 46, "sells": [], "status": "未售出", "source": "自己收的", "imageUrl": "cardimg/CS6.5C-055.png", "profit": null}, {"id": 17, "name": "龙柱v sr", "unitPrice": 21, "qty": 4, "cost": 84, "sells": [], "status": "未售出", "source": "自己收的", "imageUrl": "cardimg/CS6.5C-082.png", "profit": null}, {"id": 18, "name": "龙柱v sr", "unitPrice": 14, "qty": 1, "cost": 14, "sells": [], "status": "未售出", "source": "自己收的", "imageUrl": "cardimg/CS6.5C-082.png", "profit": null}, {"id": 19, "name": "龙柱v sr", "unitPrice": 172, "qty": 2, "cost": 344, "sells": [], "status": "未售出", "source": "自己收的", "imageUrl": "cardimg/CS6.5C-082.png", "profit": null}, {"id": 20, "name": "龙柱v sr", "unitPrice": 178, "qty": 3, "cost": 534, "sells": [], "status": "未售出", "source": "自己收的", "imageUrl": "cardimg/CS6.5C-082.png", "profit": null}, {"id": 21, "name": "叶伊布ex", "unitPrice": 255, "qty": 1, "cost": 255, "sells": [{"id": "s1", "qty": 1, "unitPrice": 405.36, "total": 405.36}], "status": "已售出", "source": "自己收的", "profit": 150.36}, {"id": 22, "name": "冰伊布ex", "unitPrice": 230, "qty": 1, "cost": 230, "sells": [{"id": "s1", "qty": 1, "unitPrice": 380.0, "total": 380.0}], "status": "已售出", "source": "自己收的", "profit": 150.0}, {"id": 23, "name": "利佳", "unitPrice": 40, "qty": 1, "cost": 40, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 24, "name": "剑豹ex sar", "unitPrice": 83, "qty": 2, "cost": 166, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 25, "name": "水龙v", "unitPrice": 105, "qty": 1, "cost": 105, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 26, "name": "皮卡丘v", "unitPrice": 15, "qty": 15, "cost": 225, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 27, "name": "伊布v", "unitPrice": 15, "qty": 16, "cost": 240, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 28, "name": "光辉伊布", "unitPrice": 34, "qty": 1, "cost": 34, "sells": [{"id": "s1", "qty": 1, "unitPrice": 60.0, "total": 60.0}], "status": "已售出", "source": "自己收的", "profit": 26.0}, {"id": 29, "name": "金恶能", "unitPrice": 54, "qty": 4, "cost": 216, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 30, "name": "博士sr", "unitPrice": 38, "qty": 1, "cost": 38, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 31, "name": "皮卡丘", "unitPrice": 22.3, "qty": 2, "cost": 44.6, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 32, "name": "雷公v", "unitPrice": 100, "qty": 1, "cost": 100, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 33, "name": "闪耀虫神", "unitPrice": 5, "qty": 1, "cost": 5, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 34, "name": "闪耀凤王", "unitPrice": 20, "qty": 3, "cost": 60, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 35, "name": "闪耀基拉祈", "unitPrice": 10, "qty": 1, "cost": 10, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 36, "name": "骨文巨声鳄sar", "unitPrice": 20, "qty": 1, "cost": 20, "sells": [{"id": "s1", "qty": 1, "unitPrice": 46.2, "total": 46.2}], "status": "已售出", "source": "自己收的", "profit": 26.2}, {"id": 37, "name": "雷伊布ex", "unitPrice": 183, "qty": 1, "cost": 183, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 38, "name": "线条月亮伊布", "unitPrice": 850, "qty": 1, "cost": 850, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 39, "name": "闪耀梦幻", "unitPrice": 0, "qty": 3, "cost": 0, "sells": [{"id": "s1", "qty": 1, "unitPrice": 100.0, "total": 100.0}], "status": "已售出", "source": "自己收的", "profit": 100.0}, {"id": 40, "name": "线条皮卡丘", "unitPrice": 812, "qty": 1, "cost": 812, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 41, "name": "洛奇亚", "unitPrice": 705, "qty": 1, "cost": 705, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 42, "name": "一击熊", "unitPrice": 140, "qty": 1, "cost": 140, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 43, "name": "皮卡丘vm", "unitPrice": 193, "qty": 1, "cost": 193, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 44, "name": "梦幻ex sar（有瑕）", "unitPrice": 600, "qty": 1, "cost": 600, "sells": [{"id": "s1", "qty": 1, "unitPrice": 785.08, "total": 785.08}], "status": "已售出", "source": "自己收的", "profit": 185.08}, {"id": 45, "name": "鬼龙sr", "unitPrice": 1000, "qty": 1, "cost": 1000, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 46, "name": "水伊布ex sar", "unitPrice": 238, "qty": 1, "cost": 238, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 47, "name": "牡丹", "unitPrice": 40, "qty": 3, "cost": 120, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 48, "name": "火恐龙", "unitPrice": 40, "qty": 1, "cost": 40, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 49, "name": "杰尼龟", "unitPrice": 30, "qty": 1, "cost": 30, "sells": [{"id": "s1", "qty": 1, "unitPrice": 106.82, "total": 106.82}], "status": "已售出", "source": "自己收的", "profit": 76.82}, {"id": 50, "name": "卡米龟", "unitPrice": 25, "qty": 1, "cost": 25, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 51, "name": "刃鬼3星", "unitPrice": 75.1, "qty": 1, "cost": 75.1, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 52, "name": "耿鬼vm", "unitPrice": 7.2, "qty": 2, "cost": 14.4, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 53, "name": "喵喵3星", "unitPrice": 120, "qty": 1, "cost": 120, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 54, "name": "刃鬼3星", "unitPrice": 60, "qty": 2, "cost": 120, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 55, "name": "梦妖魔3星", "unitPrice": 20, "qty": 1, "cost": 20, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 56, "name": "刃鬼3星", "unitPrice": 52, "qty": 1, "cost": 52, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 57, "name": "喷火龙ex", "unitPrice": 9, "qty": 1, "cost": 9, "sells": [{"id": "s1", "qty": 1, "unitPrice": 9.0, "total": 9.0}], "status": "已售出", "source": "自己收的", "profit": 0.0}, {"id": 58, "name": "铁包袱", "unitPrice": 9, "qty": 1, "cost": 9, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 59, "name": "刃鬼3星", "unitPrice": 45, "qty": 5, "cost": 225, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 60, "name": "水晶灯3星", "unitPrice": 20, "qty": 1, "cost": 20, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 61, "name": "派帕", "unitPrice": 180, "qty": 1, "cost": 180, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 62, "name": "电影超梦原包", "unitPrice": 164, "qty": 1, "cost": 164, "sells": [{"id": "s1", "qty": 1, "unitPrice": 380.0, "total": 380.0}], "status": "已售出", "source": "自己收的", "profit": 216.0}, {"id": 63, "name": "插画甲贺忍蛙", "unitPrice": 80, "qty": 1, "cost": 80, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 64, "name": "海豚侠ex", "unitPrice": 48, "qty": 1, "cost": 48, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 65, "name": "喷火龙vstar", "unitPrice": 170, "qty": 1, "cost": 170, "sells": [{"id": "s1", "qty": 1, "unitPrice": 244.16, "total": 244.16}], "status": "已售出", "source": "自己收的", "profit": 74.16}, {"id": 66, "name": "超梦vstar", "unitPrice": 160, "qty": 1, "cost": 160, "sells": [{"id": "s1", "qty": 1, "unitPrice": 244.16, "total": 244.16}], "status": "已售出", "source": "自己收的", "profit": 84.16}, {"id": 67, "name": "利欧路", "unitPrice": 13, "qty": 1, "cost": 13, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 68, "name": "火箭队的迷你q", "unitPrice": 23, "qty": 1, "cost": 23, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 69, "name": "N的捷克罗姆", "unitPrice": 56, "qty": 1, "cost": 56, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 70, "name": "mage雪妖女", "unitPrice": 18, "qty": 1, "cost": 18, "sells": [{"id": "s1", "qty": 1, "unitPrice": 25.0, "total": 25.0}], "status": "已售出", "source": "自己收的", "profit": 7.0}, {"id": 71, "name": "mage鳗鱼王", "unitPrice": 12, "qty": 1, "cost": 12, "sells": [{"id": "s1", "qty": 1, "unitPrice": 20.0, "total": 20.0}], "status": "已售出", "source": "自己收的", "profit": 8.0}, {"id": 72, "name": "mega沙奈朵", "unitPrice": 40, "qty": 1, "cost": 40, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 73, "name": "mega蒂安西", "unitPrice": 21, "qty": 1, "cost": 21, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 74, "name": "Mega卢卡利欧", "unitPrice": 40, "qty": 1, "cost": 40, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 75, "name": "Mega摔跤鹰人", "unitPrice": 12, "qty": 1, "cost": 12, "sells": [{"id": "s1", "qty": 1, "unitPrice": 20.0, "total": 20.0}], "status": "已售出", "source": "自己收的", "profit": 8.0}, {"id": 76, "name": "mega耿鬼", "unitPrice": 133.6, "qty": 1, "cost": 133.6, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 77, "name": "奇树的大电海燕", "unitPrice": 21, "qty": 1, "cost": 21, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 78, "name": "Mega流氓头头", "unitPrice": 14, "qty": 1, "cost": 14, "sells": [{"id": "s1", "qty": 1, "unitPrice": 20.0, "total": 20.0}], "status": "已售出", "source": "自己收的", "profit": 6.0}, {"id": 79, "name": "海豚侠ex", "unitPrice": 51, "qty": 1, "cost": 51, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 80, "name": "mega巨牙鲨sar", "unitPrice": 40, "qty": 1, "cost": 40, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 81, "name": "Mega流氓头头", "unitPrice": 7, "qty": 1, "cost": 7, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 82, "name": "mega 快龙", "unitPrice": 58, "qty": 1, "cost": 58, "sells": [{"id": "s1", "qty": 1, "unitPrice": 120.0, "total": 120.0}], "status": "已售出", "source": "自己收的", "profit": 62.0}, {"id": 83, "name": "ace枪", "unitPrice": 200, "qty": 1, "cost": 200, "sells": [{"id": "s1", "qty": 1, "unitPrice": 216.95, "total": 216.95}], "status": "已售出", "source": "自己收的", "profit": 16.95}, {"id": 84, "name": "mega 快龙", "unitPrice": 55, "qty": 2, "cost": 110, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 85, "name": "Mega卢卡利欧", "unitPrice": 33, "qty": 1, "cost": 33, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 86, "name": "忍蛙sar", "unitPrice": 514, "qty": 1, "cost": 514, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 87, "name": "忍蛙sar", "unitPrice": 474, "qty": 1, "cost": 474, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 88, "name": "古简蜗ex", "unitPrice": 17.3, "qty": 1, "cost": 17.3, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 89, "name": "赛富豪ex", "unitPrice": 11.9, "qty": 1, "cost": 11.9, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 90, "name": "耿鬼ex", "unitPrice": 44, "qty": 1, "cost": 44, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 91, "name": "排帕sar", "unitPrice": 117, "qty": 4, "cost": 468, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 92, "name": "mega喷火龙", "unitPrice": 190, "qty": 1, "cost": 190, "sells": [{"id": "s1", "qty": 1, "unitPrice": 291.5, "total": 291.5}], "status": "已售出", "source": "自己收的", "profit": 101.5}, {"id": 93, "name": "闪耀时拉比", "unitPrice": 21, "qty": 3, "cost": 63, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 94, "name": "闪耀凤王", "unitPrice": 24, "qty": 3, "cost": 72, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 95, "name": "闪耀洛奇亚", "unitPrice": 47.4, "qty": 3, "cost": 142.2, "sells": [{"id": "s1", "qty": 1, "unitPrice": 270.89, "total": 270.89}], "status": "已售出", "source": "自己收的", "profit": 128.69}, {"id": 96, "name": "闪耀阿尔宙斯", "unitPrice": 23.2, "qty": 4, "cost": 92.8, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 97, "name": "猛雷鼓sr", "unitPrice": 13, "qty": 2, "cost": 26, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 98, "name": "30周年草苗龟", "unitPrice": 12, "qty": 1, "cost": 12, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 99, "name": "30周年木木枭", "unitPrice": 20, "qty": 1, "cost": 20, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 100, "name": "30周年火斑喵", "unitPrice": 15, "qty": 1, "cost": 15, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 101, "name": "呆火鳄3星", "unitPrice": 7.28, "qty": 1, "cost": 7.28, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 102, "name": "长耳兔tt", "unitPrice": 8.8, "qty": 1, "cost": 8.8, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 103, "name": "沙奈朵tt", "unitPrice": 35.66, "qty": 1, "cost": 35.66, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 104, "name": "不公印章", "unitPrice": 39.88, "qty": 1, "cost": 39.88, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 105, "name": "洛奇亚sr", "unitPrice": 556, "qty": 1, "cost": 556, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 106, "name": "超级蒂安希ma", "unitPrice": 30, "qty": 1, "cost": 30, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 107, "name": "超级雪妖女ma", "unitPrice": 30, "qty": 1, "cost": 30, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 108, "name": "超级摔跤鹰人", "unitPrice": 30, "qty": 1, "cost": 30, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 109, "name": "P10荷叶皮卡丘（简中）", "unitPrice": 988, "qty": 1, "cost": 988, "sells": [{"id": "s1", "qty": 1, "unitPrice": 1500.0, "total": 1500.0}], "status": "已售出", "source": "自己收的", "profit": 512.0}];
 
 const STORAGE_KEY = 'kajia_card_data';
+const OLD_CARD_STORAGE_KEY = 'kajia_old_card_data';
 const SUPABASE_CONFIG_KEY = 'kajia_supabase_config';
 const DATA_URL_PREFIX = 'data:';
 const ACCESS_SESSION_KEY = 'kajia_access_granted';
@@ -1770,6 +1771,428 @@ function BatchImageModal({ items, onUpdate, onClose, showToast }) {
   );
 }
 
+function OldCardInventoryTab({ showToast }) {
+  const [items, setItems] = useState(() => {
+    try {
+      const saved = localStorage.getItem(OLD_CARD_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const normalized = normalizeItems(parsed);
+        if (Array.isArray(parsed)) return normalized;
+      }
+    } catch (e) {}
+    return [];
+  });
+  const [filter, setFilter] = useState('全部');
+  const [search, setSearch] = useState('');
+  const [sortField, setSortField] = useState('id');
+  const [sortDir, setSortDir] = useState('desc');
+  const [editingItem, setEditingItem] = useState(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [batchImage, setBatchImage] = useState(false);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 20;
+
+  useEffect(() => {
+    persistItemsToStorage(items, OLD_CARD_STORAGE_KEY);
+  }, [items]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, filter, sortField, sortDir]);
+
+  function persistItemsToStorage(itemsToStore, storageKey) {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(itemsToStore));
+      return { ok: true, degraded: false };
+    } catch (error) {
+      const safeItems = makeStorageSafeItems(itemsToStore);
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(safeItems));
+        return { ok: true, degraded: true };
+      } catch (fallbackError) {
+        console.error('localStorage 持久化失败', fallbackError);
+        return { ok: false, degraded: false, error: fallbackError };
+      }
+    }
+  }
+
+  function getSortVal(item, field) {
+    if (field === 'remaining') return (item.qty ?? 0) - (item.sells || []).reduce((s, v) => s + (v.qty || 0), 0);
+    if (field === 'soldValue') return (item.sells || []).reduce((s, v) => s + (v.total || 0), 0);
+    let val = item[field];
+    if (val === null || val === undefined) {
+      return field === 'profit' ? -Infinity : (typeof items?.[0]?.[field] === 'number' ? -Infinity : '');
+    }
+    return val;
+  }
+
+  const filtered = useMemo(() => {
+    let list = items;
+    if (filter === '已售出') list = list.filter(i => i.status === '已售出');
+    else if (filter === '待签收') list = list.filter(i => i.status === '待签收');
+    else if (filter === '未售出') list = list.filter(i => i.status === '未售出');
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(i => String(i.name || '').toLowerCase().includes(q));
+    }
+    list = [...list].sort((a, b) => {
+      const rawA = getSortVal(a, sortField);
+      const rawB = getSortVal(b, sortField);
+      if (typeof rawA === 'string' && typeof rawB === 'string') {
+        const av = rawA.toLowerCase();
+        const bv = rawB.toLowerCase();
+        if (av < bv) return sortDir === 'asc' ? -1 : 1;
+        if (av > bv) return sortDir === 'asc' ? 1 : -1;
+        return 0;
+      }
+      const av = rawA ?? -Infinity;
+      const bv = rawB ?? -Infinity;
+      if (av < bv) return sortDir === 'asc' ? -1 : 1;
+      if (av > bv) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [items, filter, search, sortField, sortDir]);
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE) || 1;
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  function handleSort(field) {
+    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortField(field); setSortDir('asc'); }
+  }
+
+  function handleSave(updated) {
+    setItems(prev => prev.map(i => i.id === updated.id ? updated : i));
+    setEditingItem(null);
+    showToast('老卡记录已保存 ✓');
+  }
+
+  function handleAdd(newItem) {
+    const item = { ...newItem, id: generateId(items) };
+    setItems(prev => [item, ...prev]);
+    setShowAdd(false);
+    showToast('老卡记录已添加 ✓');
+  }
+
+  function handleDelete(id) {
+    if (!confirm('确定要删除这条老卡记录吗？')) return;
+    setItems(prev => prev.filter(i => i.id !== id));
+    showToast('老卡记录已删除');
+  }
+
+  function handleBulkMarkSigned() {
+    setItems(prev => prev.map(i => {
+      if (i.status === '未售出' && (i.sells || []).reduce((s, v) => s + (v.total || 0), 0) > 0) {
+        return { ...i, status: '待签收' };
+      }
+      return i;
+    }));
+    showToast('老卡记录已批量设为待签收 ✓');
+  }
+
+  function exportCSV() {
+    const headers = ['ID', '名称', '单价', '数量', '已售数量', '剩余数量', '成本', '已售总收入', '利润', '状态', '来源'];
+    const sortedForExport = [...items].sort((a, b) => a.id - b.id);
+    const exportRows = sortedForExport.map(i => {
+      const sells = i.sells || [];
+      const totalSellQty = sells.reduce((s, v) => s + (v.qty || 0), 0);
+      const totalSellVal = sells.reduce((s, v) => s + (v.total || 0), 0);
+      const remaining = (i.qty || 0) - totalSellQty;
+      return [i.id, i.name, i.unitPrice ?? '', i.qty ?? '', totalSellQty, remaining, i.cost ?? '', totalSellVal || '', i.profit ?? '', i.status, i.source];
+    });
+    const csv = [headers, ...exportRows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '老卡出售记录_' + new Date().toISOString().slice(0,10) + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('老卡 CSV 已下载 ✓');
+  }
+
+  function saveBackup() {
+    const backupPayload = makeBackupSafeItems(items);
+    const backup = {
+      version: '1.1',
+      exportedAt: new Date().toISOString(),
+      items: backupPayload.items
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '老卡出售记录备份_' + new Date().toISOString().slice(0, 10) + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('老卡备份已保存 ✓');
+  }
+
+  const totalCards = items.reduce((sum, i) => sum + (i.qty || 1), 0);
+  const totalCost = items.reduce((sum, i) => sum + (i.cost || 0), 0);
+  const totalSoldValue = items.filter(i => i.status === '已售出').reduce((sum, i) => sum + (i.sells || []).reduce((s, v) => s + (v.total || 0), 0), 0);
+  const totalPendingValue = items.filter(i => i.status === '待签收').reduce((sum, i) => sum + (i.sells || []).reduce((s, v) => s + (v.total || 0), 0), 0);
+  const totalSoldCost = items.filter(i => i.status === '已售出' || i.status === '待签收').reduce((sum, i) => sum + (i.cost || 0), 0);
+  const totalEarned = totalSoldValue + totalPendingValue;
+  const toBreakEven = totalCost - totalEarned;
+  const totalProfit = items.reduce((sum, i) => {
+    if (i.status === '未售出') return sum;
+    const totalSell = (i.sells || []).reduce((s, v) => s + (v.total || 0), 0);
+    return sum + round2(totalSell - (i.cost || 0));
+  }, 0);
+  const soldCount = items.filter(i => i.status === '已售出').length;
+  const pendingCount = items.filter(i => i.status === '待签收').length;
+  const unsoldCount = items.filter(i => i.status === '未售出').length;
+
+  function SortIcon({ field }) {
+    if (sortField !== field) return <span className="sort-icon">⇅</span>;
+    return <span className="sort-icon">{sortDir === 'asc' ? '↑' : '↓'}</span>;
+  }
+
+  function statusBadgeClass(item) {
+    if (item.status === '已售出') return 'status-badge status-sold';
+    if (item.status === '待签收') return 'status-badge status-signed';
+    return 'status-badge status-unsold';
+  }
+
+  function statusBadgeText(item) {
+    if (item.status === '已售出') return '● 已售出';
+    if (item.status === '待签收') return '● 待签收';
+    return '○ 未售出';
+  }
+
+  function rowClass(item) {
+    if (item.status === '已售出') return 'status-sold';
+    if (item.status === '待签收') return 'status-signed';
+    return '';
+  }
+
+  return (
+    <>
+      <div className="stats-bar">
+        <div className="stat-card blue">
+          <div className="stat-label">库存成本</div>
+          <div className="stat-value">{formatMoney(totalCost)}</div>
+          <div className="stat-sub">{unsoldCount} 种未售出</div>
+          <div style={{marginTop:10,paddingTop:10,borderTop:'1px solid rgba(255,255,255,0.06)'}}>
+            <div style={{fontSize:11,color:'#8b949e',marginBottom:2}}>{toBreakEven > 0 ? '距回本还差' : '已超额回本'}</div>
+            <div style={{fontSize:18,fontWeight:700,color:toBreakEven > 0 ? '#f0883e' : '#3fb950'}}>{toBreakEven > 0 ? formatMoney(toBreakEven) : formatMoney(-toBreakEven)}</div>
+            <div style={{fontSize:10,color:'#6e7681'}}>已收 {formatMoney(totalEarned)}</div>
+          </div>
+        </div>
+        <div className="stat-card green">
+          <div className="stat-label">已售总额</div>
+          <div className="stat-value green">{formatMoney(totalSoldValue)}</div>
+          <div className="stat-sub">{soldCount} 种已售出</div>
+          <div style={{marginTop:10,paddingTop:10,borderTop:'1px solid rgba(255,255,255,0.06)'}}>
+            <div style={{fontSize:11,color:'#8b949e',marginBottom:2}}>当前利润</div>
+            <div style={{fontSize:18,fontWeight:700,color:totalProfit >= 0 ? '#3fb950' : '#f85149'}}>{totalProfit >= 0 ? '+' : ''}{formatMoney(totalProfit)}</div>
+            <div style={{fontSize:10,color:'#6e7681'}}>利润率 {totalSoldValue > 0 ? ((totalProfit / (totalSoldCost || 1)) * 100).toFixed(1) : 0}%</div>
+          </div>
+        </div>
+        <div className="stat-card primary">
+          <div className="stat-label">总卡牌数</div>
+          <div className="stat-value">{items.length}</div>
+          <div className="stat-sub">{totalCards} 张卡牌</div>
+        </div>
+        <div className="stat-card blue">
+          <div className="stat-label">已售成本</div>
+          <div className="stat-value">{formatMoney(totalSoldCost)}</div>
+          <div className="stat-sub">已售+待签收</div>
+        </div>
+        <div className="stat-card red">
+          <div className="stat-label">待签收金额</div>
+          <div className="stat-value" style={{color:'#f85149'}}>{formatMoney(totalPendingValue)}</div>
+          <div className="stat-sub">{pendingCount} 种待签收</div>
+        </div>
+      </div>
+
+      <div className="table-sticky-wrapper">
+        <div className="toolbar">
+          <div className="search-box">
+            <svg className="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="m21 21-4.35-4.35"/>
+            </svg>
+            <input placeholder="搜索老卡名称..." value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          <div className="filter-group">
+            <button className={`filter-btn ${filter === '全部' ? 'active' : ''}`} onClick={() => setFilter('全部')}>全部</button>
+            <button className={`filter-btn ${filter === '未售出' ? 'active' : ''}`} onClick={() => setFilter('未售出')}>未售出</button>
+            <button className={`filter-btn ${filter === '已售出' ? 'active-green' : ''}`} onClick={() => setFilter('已售出')}>已售出</button>
+            <button className={`filter-btn ${filter === '待签收' ? 'active-orange' : ''}`} onClick={() => setFilter('待签收')}>待签收</button>
+          </div>
+          <div className="bulk-actions">
+            <select value={sortField + '|' + sortDir} onChange={e => {
+              const [f, d] = e.target.value.split('|');
+              setSortField(f);
+              setSortDir(d);
+            }} style={{
+              padding:'8px 12px', borderRadius:6, border:'1px solid var(--border)',
+              background:'var(--surface-solid)', color:'var(--text-2)',
+              fontSize:12, fontWeight:600, fontFamily:"'Plus Jakarta Sans', sans-serif",
+              cursor:'pointer', outline:'none'
+            }}>
+              <option value="id|desc">⇅ 默认（最新在前）</option>
+              <option value="id|asc">⇅ ID 升序</option>
+              <option value="name|asc">⇅ 名称 A→Z</option>
+              <option value="name|desc">⇅ 名称 Z→A</option>
+              <option value="unitPrice|desc">⇅ 单价 高→低</option>
+              <option value="unitPrice|asc">⇅ 单价 低→高</option>
+              <option value="qty|desc">⇅ 数量 多→少</option>
+              <option value="cost|desc">⇅ 成本 高→低</option>
+              <option value="cost|asc">⇅ 成本 低→高</option>
+              <option value="remaining|desc">⇅ 剩余 多→少</option>
+              <option value="remaining|asc">⇅ 剩余 少→多</option>
+              <option value="soldValue|desc">⇅ 已售额 高→低</option>
+              <option value="soldValue|asc">⇅ 已售额 低→高</option>
+              <option value="profit|desc">⇅ 利润 高→低</option>
+              <option value="profit|asc">⇅ 利润 低→高</option>
+            </select>
+            <button className="btn btn-secondary" onClick={handleBulkMarkSigned}>批量设为待签收</button>
+            <button className="btn btn-secondary" onClick={saveBackup}>💾 保存备份</button>
+            <button className="btn btn-secondary" onClick={() => document.getElementById('oldCardImportInput').click()}>📂 导入备份</button>
+            <input id="oldCardImportInput" type="file" accept=".json" style={{display:'none'}} onChange={e => {
+              const file = e.target.files[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = ev => {
+                try {
+                  const data = JSON.parse(ev.target.result);
+                  const importedItems = Array.isArray(data) ? data : (data.items || []);
+                  const normalizedItems = normalizeItems(importedItems);
+                  if (normalizedItems.length === 0) { showToast('老卡文件格式错误或无可导入数据'); return; }
+                  if (!confirm(`将导入 ${normalizedItems.length} 条老卡数据，当前老卡数据将被覆盖，确定吗？`)) return;
+                  setItems(normalizedItems);
+                  showToast('老卡数据导入成功 ✓');
+                } catch {
+                  showToast('老卡文件解析失败');
+                }
+              };
+              reader.readAsText(file);
+              e.target.value = '';
+            }} />
+            <button className="btn btn-secondary" onClick={exportCSV}>📥 导出 CSV</button>
+          </div>
+        </div>
+
+        {showAdd && <AddCardForm onAdd={handleAdd} onCancel={() => setShowAdd(false)} />}
+        {!showAdd && (
+          <div className="add-form-toggle" style={{display:'flex', gap:12, flexWrap:'wrap'}}>
+            <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ 添加老卡记录</button>
+            <button className="btn" style={{background:'rgba(34,197,94,0.15)',color:'#22c55e',border:'1px solid rgba(34,197,94,0.3)'}} onClick={() => setBatchImage(true)}>🖼️ 批量添加图片</button>
+          </div>
+        )}
+        {batchImage && <BatchImageModal items={items} onUpdate={setItems} onClose={() => setBatchImage(false)} showToast={showToast} />}
+
+        <div className="table-container">
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style={{width: 60, textAlign:'center'}} onClick={() => handleSort('id')} className={sortField === 'id' ? 'sorted' : ''}>ID <SortIcon field="id"/></th>
+                  <th style={{width: 56, textAlign:'center'}}>图</th>
+                  <th onClick={() => handleSort('name')} className={sortField === 'name' ? 'sorted' : ''}>卡牌名称 <SortIcon field="name"/></th>
+                  <th onClick={() => handleSort('unitPrice')} className={sortField === 'unitPrice' ? 'sorted' : ''} style={{textAlign:'right'}}>单价 <SortIcon field="unitPrice"/></th>
+                  <th onClick={() => handleSort('qty')} className={sortField === 'qty' ? 'sorted' : ''} style={{textAlign:'right'}}>数量 <SortIcon field="qty"/></th>
+                  <th onClick={() => handleSort('remaining')} className={sortField === 'remaining' ? 'sorted' : ''} style={{textAlign:'right'}}>剩余 <SortIcon field="remaining"/></th>
+                  <th onClick={() => handleSort('cost')} className={sortField === 'cost' ? 'sorted' : ''} style={{textAlign:'right'}}>成本 <SortIcon field="cost"/></th>
+                  <th onClick={() => handleSort('soldValue')} className={sortField === 'soldValue' ? 'sorted' : ''} style={{textAlign:'right', fontSize: 11}}>已售 <SortIcon field="soldValue"/></th>
+                  <th onClick={() => handleSort('profit')} className={sortField === 'profit' ? 'sorted' : ''} style={{textAlign:'right'}}>利润 <SortIcon field="profit"/></th>
+                  <th onClick={() => handleSort('status')} className={sortField === 'status' ? 'sorted' : ''} style={{width:100}}>状态 <SortIcon field="status"/></th>
+                  <th style={{width: 120}}>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginated.length === 0 ? (
+                  <tr><td colSpan={11}><div className="empty-state"><div className="empty-icon">🗂️</div>老卡出售记录还是空的，先导入数据或手动新增一条吧</div></td></tr>
+                ) : paginated.map(item => (
+                  <tr key={item.id} className={rowClass(item)}>
+                    <td style={{color: '#64748b', fontSize: 12, textAlign:'center'}}>{item.id}</td>
+                    <td>
+                      {item.imageUrl ? (
+                        <img
+                          src={item.imageUrl}
+                          alt={item.name}
+                          style={{width:40,height:40,objectFit:'contain',borderRadius:6,border:'1px solid var(--border)',background:'#1c2a45',flexShrink:0}}
+                          onError={e => { e.target.style.display='none'; }}
+                        />
+                      ) : (
+                        <div style={{width:40,height:40,borderRadius:6,border:'1px dashed var(--border)',background:'#1c2a45',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>🃏</div>
+                      )}
+                    </td>
+                    <td className="card-name">{item.name}</td>
+                    <td className="price-cell" style={{textAlign:'right'}}>{item.unitPrice !== null ? '¥' + item.unitPrice.toLocaleString('zh-CN', {minimumFractionDigits:2}) : '—'}</td>
+                    <td className="price-cell" style={{textAlign:'right'}}>{item.qty ?? '—'}</td>
+                    <td className="price-cell" style={{textAlign:'right', color: '#64748b'}}>{(item.qty ?? 0) - (item.sells || []).reduce((s, v) => s + (v.qty || 0), 0)}</td>
+                    <td className="price-cell" style={{textAlign:'right'}}>{item.cost !== null ? formatMoney(item.cost) : '—'}</td>
+                    <td className="price-cell" style={{textAlign:'right', color: 'var(--green)', fontWeight:600}}>
+                      {(item.sells || []).reduce((s, v) => s + (v.qty || 0), 0) > 0
+                        ? (() => {
+                            const totalQty = (item.sells || []).reduce((s, v) => s + (v.qty || 0), 0);
+                            const totalVal = (item.sells || []).reduce((s, v) => s + (v.total || 0), 0);
+                            return `${totalQty}张 ¥${totalVal.toFixed(2)}`;
+                          })()
+                        : '—'}
+                    </td>
+                    <td className="price-cell" style={{textAlign:'right'}}>
+                      {item.profit !== null ? (
+                        <span className={item.profit > 0 ? 'profit-positive' : item.profit < 0 ? 'profit-negative' : 'profit-zero'}>
+                          {item.profit > 0 ? '+' : ''}{formatMoney(item.profit)}
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td><span className={statusBadgeClass(item)}>{statusBadgeText(item)}</span></td>
+                    <td>
+                      <div style={{display:'flex', gap:4}}>
+                        <button className="action-btn" onClick={() => setEditingItem(item)}>编辑</button>
+                        <button className="action-btn" style={{color:'#ef4444', borderColor:'#7f1d1d',background:'#2d1212'}} onClick={() => handleDelete(item.id)}>删除</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {totalPages > 1 && (
+              <div style={{padding:'16px', display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'1px solid var(--border)'}}>
+                <div style={{fontSize:13, color:'var(--text-2)'}}>
+                  显示 {(page-1)*PAGE_SIZE + 1}–{Math.min(page*PAGE_SIZE, filtered.length)}，共 {filtered.length} 条
+                </div>
+                <div style={{display:'flex', gap:4}}>
+                  <button className="btn btn-secondary" disabled={page === 1} onClick={() => setPage(p => p - 1)}>‹ 上一页</button>
+                  {Array.from({length: Math.min(5, totalPages)}, (_, i) => {
+                    let p = i + 1;
+                    if (totalPages > 5) {
+                      if (page > 3) p = page - 2 + i;
+                      if (page > totalPages - 2) p = totalPages - 4 + i;
+                    }
+                    if (p < 1 || p > totalPages) return null;
+                    return <button key={p} className={`btn ${page === p ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setPage(p)} style={{minWidth:40}}>{p}</button>;
+                  })}
+                  <button className="btn btn-secondary" disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>下一页 ›</button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div style={{textAlign:'center', fontSize:12, color:'var(--text-2)', marginTop:12}}>
+            <div className="color-legend" style={{justifyContent:'center'}}>
+              <div className="color-legend-item"><div className="color-dot gray"></div>未售出</div>
+              <div className="color-legend-item"><div className="color-dot green"></div>已售出</div>
+              <div className="color-legend-item"><div className="color-dot orange"></div>待签收</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {editingItem && <EditModal item={editingItem} onSave={handleSave} onClose={() => setEditingItem(null)} onToast={showToast} />}
+    </>
+  );
+}
+
 // Main App
 function App({ onLock }) {
   const [zoomedImage, setZoomedImage] = useState(null);
@@ -2221,6 +2644,7 @@ function App({ onLock }) {
       <div style={{maxWidth:1400, margin:'0 auto', padding:'16px 32px 0', display:'flex', gap:8}}>
         <button className={`filter-btn ${activeTab === 'main' ? 'active' : ''}`} onClick={() => setActiveTab('main')}>📦 卡价管理</button>
         <button className={`filter-btn ${activeTab === '0754' ? 'active' : ''}`} onClick={() => setActiveTab('0754')}>0754 售出</button>
+        <button className={`filter-btn ${activeTab === 'old-cards' ? 'active' : ''}`} onClick={() => setActiveTab('old-cards')}>🗂️ 老卡出售记录</button>
       </div>
 
       {/* Main Tab Content */}
@@ -2452,6 +2876,9 @@ function App({ onLock }) {
 
       {/* 0754 售出 Tab */}
       {activeTab === '0754' && <Tab0754 />}
+
+      {/* 老卡出售记录 Tab */}
+      {activeTab === 'old-cards' && <OldCardInventoryTab showToast={showToast} />}
 
       {/* Image Zoom Modal */}
       {zoomedImage && (
