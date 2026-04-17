@@ -1,0 +1,43 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Numbers 内部文件（二进制格式无法解析）
+numbers_extracted/
+
+# 备份数据（敏感数据）
+备份数据/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 临时文件
+*.tmp
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# WorkBuddy 工作目录
+.workbuddy/
+
+# Playwright 缓存
+.playwright/
+
+# 迁移脚本（临时）
+migrate_cardcode.py
+migrate_cardcode.js
+
+# 原始数据文件（太大）
+卡价.numbers
+卡价.xlsx
+图片URL映射表.txt
+卡牌图片搜索指南.md
+card_data.json
+fetch_images.py
+migrate.py
+clear_cache.html

@@ -1,0 +1,1798 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>卡价管理后台</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: rgba(22, 27, 34, 0.85);
+      --surface-solid: #161b22;
+      --surface-2: rgba(33, 38, 45, 0.9);
+      --surface-3: #21262d;
+      --primary: #58a6ff;
+      --primary-light: #79b8ff;
+      --primary-dim: rgba(88, 166, 255, 0.12);
+      --accent: #f0c000;
+      --accent-dim: rgba(240, 192, 0, 0.12);
+      --green: #3fb950;
+      --green-bg: rgba(63, 185, 80, 0.1);
+      --green-border: rgba(63, 185, 80, 0.3);
+      --orange: #f0883e;
+      --orange-bg: rgba(240, 136, 62, 0.1);
+      --orange-border: rgba(240, 136, 62, 0.3);
+      --red: #f85149;
+      --red-bg: rgba(248, 81, 73, 0.1);
+      --red-border: rgba(248, 81, 73, 0.3);
+      --text: #e6edf3;
+      --text-2: #8b949e;
+      --text-3: #6e7681;
+      --border: rgba(48, 54, 61, 0.8);
+      --border-bright: rgba(88, 166, 255, 0.25);
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.5);
+      --shadow: 0 4px 12px rgba(0,0,0,0.5), 0 0 0 1px rgba(48,54,61,0.5);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(48,54,61,0.5);
+      --radius: 10px;
+      --radius-sm: 6px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+      padding-top: 64px;
+      background-image: radial-gradient(ellipse at 20% 0%, rgba(88,166,255,0.05) 0%, transparent 50%),
+                        radial-gradient(ellipse at 80% 100%, rgba(63,185,80,0.04) 0%, transparent 50%);
+    }
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9998;
+      opacity: 0.35;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
+    }
+    #root { min-height: 100vh; position: relative; z-index: 1; }
+
+    /* Header */
+    .header {
+      background: rgba(13, 17, 23, 0.95);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      padding: 0 32px;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 101;
+      backdrop-filter: blur(24px) saturate(200%);
+      -webkit-backdrop-filter: blur(24px) saturate(200%);
+      box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset;
+    }
+    .header-inner { max-width: 1400px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 64px; }
+    .header-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      letter-spacing: -0.3px;
+    }
+    .header-title .logo {
+      width: 34px;
+      height: 34px;
+      flex-shrink: 0;
+    }
+    .header-title .logo svg {
+      border-radius: 50%;
+      box-shadow: 0 0 12px rgba(229,62,62,0.3);
+    }
+    .header-title small {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-3);
+      letter-spacing: 0;
+    }
+    .header-actions { display: flex; gap: 10px; align-items: center; }
+
+    .btn {
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      transition: all 0.18s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+    .btn-primary {
+      background: rgba(88,166,255,0.15);
+      color: var(--primary);
+      font-weight: 700;
+      border: 1px solid rgba(88,166,255,0.3);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    .btn-primary:hover {
+      background: rgba(88,166,255,0.25);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(88,166,255,0.2), 0 0 0 1px rgba(88,166,255,0.4);
+    }
+    .btn-secondary {
+      background: rgba(22, 27, 35, 0.7);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: var(--text-2);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .btn-secondary:hover {
+      background: rgba(22, 27, 35, 0.9);
+      color: var(--text);
+      border-color: rgba(88,166,255,0.25);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .btn-danger { background: var(--red-bg); color: var(--red) !important; border: 1px solid var(--red-border); }
+    .btn-danger:hover { background: rgba(248,81,73,0.2); }
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-2);
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+    .btn-ghost:hover { background: var(--surface-3); color: var(--primary); }
+
+    /* Stats */
+    .stats-bar {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 16px 32px;
+      display: grid;
+      position: sticky;
+      position: -webkit-sticky;
+      top: 64px;
+      z-index: 99;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+      background: rgba(13, 17, 23, 0.95);
+      backdrop-filter: blur(16px) saturate(180%);
+      -webkit-backdrop-filter: blur(16px) saturate(180%);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .stat-card {
+      background: rgba(22, 27, 35, 0.55);
+      backdrop-filter: blur(16px) saturate(180%);
+      -webkit-backdrop-filter: blur(16px) saturate(180%);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      border: 1px solid rgba(255,255,255,0.07);
+      transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.05) inset;
+    }
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+    }
+    .stat-card.primary::before { background: linear-gradient(90deg, var(--primary), rgba(88,166,255,0.4)); box-shadow: 0 0 12px var(--primary); }
+    .stat-card.green::before { background: linear-gradient(90deg, var(--green), rgba(63,185,80,0.4)); box-shadow: 0 0 12px var(--green); }
+    .stat-card.orange::before { background: linear-gradient(90deg, var(--orange), rgba(240,136,62,0.4)); box-shadow: 0 0 12px var(--orange); }
+    .stat-card.accent::before { background: linear-gradient(90deg, var(--accent), rgba(240,192,0,0.4)); box-shadow: 0 0 12px var(--accent); }
+    .stat-card.red::before { background: linear-gradient(90deg, #f85149, rgba(248,81,73,0.4)); box-shadow: 0 0 12px #f85149; }
+    .stat-card.blue::before { background: linear-gradient(90deg, var(--primary), rgba(88,166,255,0.4)); box-shadow: 0 0 12px var(--primary); }
+    .stat-card:hover {
+      transform: translateY(-3px);
+      background: rgba(22, 27, 35, 0.75);
+      border-color: rgba(88,166,255,0.2);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.08) inset;
+    }
+    .stat-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-3);
+      margin-bottom: 8px;
+    }
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      line-height: 1;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .stat-value.green { color: var(--green); }
+    .stat-value.orange { color: var(--orange); }
+    .stat-sub { font-size: 11px; color: var(--text-3); margin-top: 6px; font-weight: 500; }
+
+    /* Toolbar */
+    .toolbar {
+      max-width: 1400px;
+      margin: 0 auto 16px;
+      padding: 16px 32px;
+      display: flex;
+      gap: 12px;
+    }
+    .table-sticky-wrapper {
+      position: sticky;
+      position: -webkit-sticky;
+      top: 120px;
+      z-index: 98;
+      background: var(--bg);
+    }
+    .toolbar {
+      flex-wrap: wrap;
+      align-items: center;
+      padding: 16px 32px;
+      gap: 12px;
+    }
+    .search-box { flex: 1; min-width: 240px; position: relative; }
+    .search-box input {
+      width: 100%;
+      padding: 10px 16px 10px 42px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      outline: none;
+      transition: all 0.2s;
+      background: var(--surface-solid);
+      color: var(--text);
+    }
+    .search-box input:focus { border-color: rgba(88,166,255,0.5); box-shadow: 0 0 0 3px rgba(88,166,255,0.12), 0 0 16px rgba(88,166,255,0.08); }
+    .search-box input::placeholder { color: #484f58; }
+    .search-icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: #8b949e; pointer-events: none; }
+    .filter-group { display: flex; gap: 4px; }
+    .filter-btn {
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface-solid);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      color: var(--text-2);
+      transition: all 0.18s ease;
+    }
+    .filter-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-dim); }
+    .filter-btn.active { background: var(--primary); color: #0d1117; border-color: var(--primary); font-weight: 700; }
+    .filter-btn.active-green { background: var(--green); color: #0d1117; border-color: var(--green); font-weight: 700; }
+    .filter-btn.active-orange { background: var(--orange); color: #0d1117; border-color: var(--orange); font-weight: 700; }
+
+    /* Table */
+    .table-container { max-width: 1400px; margin: 0 auto 48px; padding: 0 32px; }
+    .table-wrap {
+      background: rgba(13, 17, 23, 0.6);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      border-radius: var(--radius);
+      border: 1px solid rgba(255,255,255,0.08);
+      overflow: hidden;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.03) inset, 0 8px 32px rgba(0,0,0,0.4);
+    }
+    table { width: 100%; border-collapse: collapse; }
+    thead { background: rgba(33, 38, 45, 0.8); }
+    th {
+      padding: 12px 16px;
+      text-align: left;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-3);
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+      transition: color 0.15s;
+    }
+    th:hover { color: var(--primary); }
+    th.sorted { color: var(--primary); }
+    th .sort-icon { margin-left: 4px; font-size: 10px; opacity: 0.6; }
+    td {
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(48,54,61,0.6);
+      vertical-align: middle;
+      font-size: 13px;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(88,166,255,0.04); }
+    tr.status-sold td { background: var(--green-bg); }
+    tr.status-sold:hover td { background: rgba(63,185,80,0.15); }
+    tr.status-signed td { background: var(--orange-bg); }
+    tr.status-signed:hover td { background: rgba(240,136,62,0.15); }
+
+    .card-name { font-weight: 600; font-size: 14px; color: var(--text); }
+    tbody tr img { transition: all 0.15s ease; cursor: zoom-in; border-radius: var(--radius-sm); }
+    tbody tr img:hover { opacity: 0.85; transform: scale(1.08); }
+
+    .mono { font-variant-numeric: tabular-nums; font-family: 'DM Mono', 'SF Mono', monospace; font-size: 13px; }
+    .profit-positive { color: var(--green); font-weight: 700; }
+    .profit-negative { color: #ef4444; font-weight: 700; }
+    .profit-zero { color: var(--text-3); }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+      letter-spacing: 0.3px;
+    }
+    .status-unsold { background: var(--surface-3); color: var(--text-3); border: 1px solid var(--border); }
+    .status-sold { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+    .status-signed { background: var(--orange-bg); color: var(--orange); border: 1px solid var(--orange-border); }
+
+    .action-btn {
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface-solid);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      transition: all 0.18s ease;
+      color: var(--text-2);
+    }
+    .action-btn:hover { background: var(--primary); color: #0d1117; border-color: var(--primary); transform: translateY(-1px); }
+    .action-btn.delete:hover { background: var(--red-bg); color: var(--red); border-color: var(--red-border); }
+
+    /* Empty state */
+    .empty-state { text-align: center; padding: 80px 20px; color: var(--text-3); }
+    .empty-icon { font-size: 56px; margin-bottom: 16px; opacity: 0.5; }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(1,4,9,0.75);
+      backdrop-filter: blur(8px) saturate(150%);
+      -webkit-backdrop-filter: blur(8px) saturate(150%);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000; padding: 20px;
+      animation: fadeIn 0.2s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .modal {
+      background: rgba(22, 27, 35, 0.9);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      border-radius: 16px;
+      width: 100%; max-width: 500px;
+      overflow: hidden;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08);
+      animation: slideUp 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+      max-height: 90vh; overflow-y: auto;
+    }
+    @keyframes slideUp { from { transform: translateY(20px) scale(0.97); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      display: flex; justify-content: space-between; align-items: center;
+      position: sticky; top: 0;
+      background: rgba(22, 27, 35, 0.8);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      z-index: 1;
+    }
+    .modal-title { font-size: 16px; font-weight: 700; color: var(--text); letter-spacing: -0.2px; }
+    .modal-close {
+      width: 32px; height: 32px; border-radius: 8px; border: none;
+      background: rgba(255,255,255,0.06); cursor: pointer; font-size: 16px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s; color: var(--text-2);
+    }
+    .modal-close:hover { background: rgba(248,81,73,0.2); color: var(--red); }
+    .modal-body { padding: 22px 24px; }
+    .modal-section-title {
+      font-size: 10px; font-weight: 700; color: var(--text-3);
+      text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .modal-section-title::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+    .profit-summary { background: var(--surface-3); border-radius: var(--radius-sm); padding: 14px 16px; border: 1px solid var(--border); }
+    .profit-row { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-2); margin-bottom: 6px; }
+    .profit-row:last-child { margin-bottom: 0; }
+    .profit-row.total { font-weight: 700; color: var(--text); font-size: 14px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+    .profit-row.total.positive { color: var(--green); }
+    .profit-row.total.negative { color: var(--red); }
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 7px; letter-spacing: 0.1px; }
+    .form-input {
+      width: 100%; padding: 10px 14px;
+      border: 1.5px solid rgba(255,255,255,0.08);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      outline: none; transition: all 0.18s;
+      background: rgba(13, 17, 23, 0.6);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: var(--text);
+    }
+    .form-input:focus { border-color: rgba(88,166,255,0.5); box-shadow: 0 0 0 3px rgba(88,166,255,0.1), 0 0 12px rgba(88,166,255,0.08); }
+    .form-input::placeholder { color: var(--text-3); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .status-options { display: flex; gap: 8px; }
+    .status-option {
+      flex: 1; padding: 10px 8px;
+      border-radius: var(--radius-sm);
+      border: 1.5px solid var(--border);
+      cursor: pointer; text-align: center;
+      font-size: 13px; font-weight: 700;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      transition: all 0.18s ease;
+      background: var(--surface-solid);
+      color: var(--text-2);
+    }
+    .status-option:hover { border-color: var(--primary); color: var(--primary); }
+    .status-option.selected-unsold { border-color: var(--text-3); background: var(--surface-3); color: var(--text-3); }
+    .status-option.selected-sold { border-color: var(--green); background: var(--green-bg); color: var(--green); }
+    .status-option.selected-signed { border-color: var(--orange); background: var(--orange-bg); color: var(--orange); }
+    .modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+      display: flex; gap: 10px; justify-content: flex-end;
+      background: rgba(33,38,45,0.6);
+    }
+    .modal-footer .btn { min-width: 90px; justify-content: center; }
+
+    /* Add card form */
+    .add-form-toggle { max-width: 1400px; margin: 0 auto 16px; padding: 0 32px; }
+    .add-form-toggle .btn { width: 100%; justify-content: center; padding: 13px; font-size: 14px; }
+    .add-form { max-width: 1400px; margin: 0 auto 16px; padding: 0 32px; }
+    .add-form-card {
+      background: rgba(22, 27, 35, 0.7);
+      backdrop-filter: blur(16px) saturate(180%);
+      -webkit-backdrop-filter: blur(16px) saturate(180%);
+      border-radius: var(--radius);
+      border: 1px solid rgba(255,255,255,0.08);
+      padding: 22px;
+      box-shadow: var(--shadow), 0 0 20px rgba(88,166,255,0.05);
+    }
+    .add-form-title {
+      font-size: 14px; font-weight: 700; margin-bottom: 16px;
+      color: var(--text);
+    }
+    .add-form-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr; gap: 12px; align-items: end; }
+    .add-form-grid .form-group { margin-bottom: 0; }
+
+    .bulk-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    /* Color legend */
+    .color-legend { display: flex; gap: 16px; align-items: center; font-size: 12px; color: var(--text-3); font-weight: 600; }
+    .color-legend-item { display: flex; align-items: center; gap: 5px; }
+    .color-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .color-dot.green { background: var(--green); }
+    .color-dot.orange { background: var(--orange); }
+    .color-dot.gray { background: var(--text-3); }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 28px; right: 28px;
+      background: var(--primary);
+      color: #0d1117;
+      padding: 12px 22px;
+      border-radius: 50px;
+      font-size: 14px; font-weight: 700;
+      z-index: 9999;
+      animation: toastIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+      box-shadow: var(--shadow-lg), 0 0 0 1px rgba(88,166,255,0.3);
+      letter-spacing: 0.2px;
+    }
+    @keyframes toastIn { from { transform: translateY(20px) scale(0.9); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+
+    /* Summary row */
+    .summary-row td { background: rgba(33,38,45,0.8) !important; font-weight: 700; color: var(--text-2); font-size: 12px; }
+
+    /* Responsive */
+    @media (max-width: 1100px) { .stats-bar { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 768px) {
+      .header-inner { flex-wrap: wrap; height: auto; padding: 14px 0; gap: 10px; }
+      .stats-bar { grid-template-columns: repeat(2, 1fr); padding: 0 16px; }
+      .toolbar { flex-direction: column; padding: 0 16px; }
+      .filter-group { width: 100%; overflow-x: auto; flex-wrap: nowrap; }
+      .table-wrap { overflow-x: auto; }
+      table { min-width: 800px; }
+      .add-form-grid { grid-template-columns: 1fr 1fr; }
+      .add-form { padding: 0 16px; }
+      .add-form-toggle { padding: 0 16px; }
+      .table-container { padding: 0 16px; }
+    }
+    @media (max-width: 480px) {
+      .stats-bar { grid-template-columns: 1fr 1fr; gap: 10px; }
+      .stat-value { font-size: 22px; }
+    }
+  </style></head>
+<body>
+<div id="root"></div>
+<script src="tab0754.js"></script>
+  <script type="text/babel">
+const { useState, useEffect, useMemo, useCallback, useRef } = React;
+
+// ── Initial data ──────────────────────────────────────────────────────────────
+const INITIAL_DATA = [{"id": 1, "name": "胡地", "unitPrice": 37, "qty": 1, "cost": 37, "sells": [{"id": "s1", "qty": 1, "unitPrice": 71.66, "total": 71.66}], "status": "已售出", "source": "自己收的", "profit": 34.66, "imageUrl": "cardimg/151C-189.png"}, {"id": 2, "name": "超梦tt", "unitPrice": 25, "qty": 2, "cost": 0, "sells": [], "status": "未售出", "source": "自己收的", "imageUrl": "cardimg/CSM2bC-034.png", "profit": null}, {"id": 3, "name": "超梦tt", "unitPrice": 22, "qty": 2, "cost": 0, "sells": [], "status": "未售出", "source": "自己收的", "imageUrl": "cardimg/CSM2bC-034.png", "profit": null}, {"id": 4, "name": "超梦tt sr", "unitPrice": 0, "qty": 1, "cost": 0, "sells": [{"id": "s1", "qty": 1, "unitPrice": 150.0, "total": 150.0}], "status": "已售出", "source": "自己收的", "imageUrl": "cardimg/CSM2bC-164.png", "profit": 150.0}, {"id": 5, "name": "暴击蚊", "unitPrice": 60, "qty": 1, "cost": 60, "sells": [{"id": "s1", "qty": 1, "unitPrice": 100, "total": 100}], "status": "待签收", "source": "自己收的", "imageUrl": "cardimg/CSM2bC-158.png", "profit": 40}, {"id": 6, "name": "梦幻ex sar", "unitPrice": 623, "qty": 1, "cost": 623, "sells": [{"id": "s1", "qty": 1, "unitPrice": 785.6, "total": 785.6}], "status": "已售出", "source": "自己收的", "imageUrl": "cardimg/151C-191.png", "profit": 162.6}, {"id": 7, "name": "梦幻ex sar", "unitPrice": 578, "qty": 1, "cost": 578, "sells": [{"id": "s1", "qty": 1, "unitPrice": 900.0, "total": 900.0}], "status": "已售出", "source": "自己收的", "imageUrl": "cardimg/151C-191.png", "profit": 322.0}, {"id": 8, "name": "连击熊", "unitPrice": 335, "qty": 1, "cost": 335, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 9, "name": "洛奇亚", "unitPrice": 618, "qty": 1, "cost": 618, "sells": [{"id": "s1", "qty": 1, "unitPrice": 800.0, "total": 800.0}], "status": "已售出", "source": "自己收的", "imageUrl": "cardimg/CS6aC-146.png", "profit": 182.0}, {"id": 10, "name": "mega 灾兽", "unitPrice": 80, "qty": 1, "cost": 80, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 11, "name": "太阳tt", "unitPrice": 232, "qty": 1, "cost": 232, "sells": [{"id": "s1", "qty": 1, "unitPrice": 250.0, "total": 250.0}], "status": "已售出", "source": "自己收的", "imageUrl": "cardimg/CSM2bC-167.png", "profit": 18.0}, {"id": 12, "name": "线条伊布x9", "unitPrice": 2199, "qty": 1, "cost": 2199, "sells": [{"id": "s1", "qty": 1, "unitPrice": 3896.48, "total": 3896.48}], "status": "已售出", "source": "自己收的", "profit": 1697.48}, {"id": 13, "name": "线条皮卡丘", "unitPrice": 135, "qty": 1, "cost": 135, "sells": [{"id": "s1", "qty": 1, "unitPrice": 800.0, "total": 800.0}], "status": "已售出", "source": "自己收的", "profit": 665.0}, {"id": 14, "name": "胡地", "unitPrice": 38, "qty": 1, "cost": 38, "sells": [], "status": "未售出", "source": "自己收的", "profit": null, "imageUrl": "cardimg/151C-189.png"}, {"id": 15, "name": "龙柱v rr", "unitPrice": 2.3, "qty": 2, "cost": 4.6, "sells": [], "status": "未售出", "source": "自己收的", "imageUrl": "cardimg/CS6.5C-054.png", "profit": null}, {"id": 16, "name": "龙柱vs rrr", "unitPrice": 11.5, "qty": 4, "cost": 46, "sells": [], "status": "未售出", "source": "自己收的", "imageUrl": "cardimg/CS6.5C-055.png", "profit": null}, {"id": 17, "name": "龙柱v sr", "unitPrice": 21, "qty": 4, "cost": 84, "sells": [], "status": "未售出", "source": "自己收的", "imageUrl": "cardimg/CS6.5C-082.png", "profit": null}, {"id": 18, "name": "龙柱v sr", "unitPrice": 14, "qty": 1, "cost": 14, "sells": [], "status": "未售出", "source": "自己收的", "imageUrl": "cardimg/CS6.5C-082.png", "profit": null}, {"id": 19, "name": "龙柱v sr", "unitPrice": 172, "qty": 2, "cost": 344, "sells": [], "status": "未售出", "source": "自己收的", "imageUrl": "cardimg/CS6.5C-082.png", "profit": null}, {"id": 20, "name": "龙柱v sr", "unitPrice": 178, "qty": 3, "cost": 534, "sells": [], "status": "未售出", "source": "自己收的", "imageUrl": "cardimg/CS6.5C-082.png", "profit": null}, {"id": 21, "name": "叶伊布ex", "unitPrice": 255, "qty": 1, "cost": 255, "sells": [{"id": "s1", "qty": 1, "unitPrice": 405.36, "total": 405.36}], "status": "已售出", "source": "自己收的", "profit": 150.36}, {"id": 22, "name": "冰伊布ex", "unitPrice": 230, "qty": 1, "cost": 230, "sells": [{"id": "s1", "qty": 1, "unitPrice": 380.0, "total": 380.0}], "status": "已售出", "source": "自己收的", "profit": 150.0}, {"id": 23, "name": "利佳", "unitPrice": 40, "qty": 1, "cost": 40, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 24, "name": "剑豹ex sar", "unitPrice": 83, "qty": 2, "cost": 166, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 25, "name": "水龙v", "unitPrice": 105, "qty": 1, "cost": 105, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 26, "name": "皮卡丘v", "unitPrice": 15, "qty": 15, "cost": 225, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 27, "name": "伊布v", "unitPrice": 15, "qty": 16, "cost": 240, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 28, "name": "光辉伊布", "unitPrice": 34, "qty": 1, "cost": 34, "sells": [{"id": "s1", "qty": 1, "unitPrice": 60.0, "total": 60.0}], "status": "已售出", "source": "自己收的", "profit": 26.0}, {"id": 29, "name": "金恶能", "unitPrice": 54, "qty": 4, "cost": 216, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 30, "name": "博士sr", "unitPrice": 38, "qty": 1, "cost": 38, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 31, "name": "皮卡丘", "unitPrice": 22.3, "qty": 2, "cost": 44.6, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 32, "name": "雷公v", "unitPrice": 100, "qty": 1, "cost": 100, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 33, "name": "闪耀虫神", "unitPrice": 5, "qty": 1, "cost": 5, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 34, "name": "闪耀凤王", "unitPrice": 20, "qty": 3, "cost": 60, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 35, "name": "闪耀基拉祈", "unitPrice": 10, "qty": 1, "cost": 10, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 36, "name": "骨文巨声鳄sar", "unitPrice": 20, "qty": 1, "cost": 20, "sells": [{"id": "s1", "qty": 1, "unitPrice": 46.2, "total": 46.2}], "status": "已售出", "source": "自己收的", "profit": 26.2}, {"id": 37, "name": "雷伊布ex", "unitPrice": 183, "qty": 1, "cost": 183, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 38, "name": "线条月亮伊布", "unitPrice": 850, "qty": 1, "cost": 850, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 39, "name": "闪耀梦幻", "unitPrice": 0, "qty": 3, "cost": 0, "sells": [{"id": "s1", "qty": 1, "unitPrice": 100.0, "total": 100.0}], "status": "已售出", "source": "自己收的", "profit": 100.0}, {"id": 40, "name": "线条皮卡丘", "unitPrice": 812, "qty": 1, "cost": 812, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 41, "name": "洛奇亚", "unitPrice": 705, "qty": 1, "cost": 705, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 42, "name": "一击熊", "unitPrice": 140, "qty": 1, "cost": 140, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 43, "name": "皮卡丘vm", "unitPrice": 193, "qty": 1, "cost": 193, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 44, "name": "梦幻ex sar（有瑕）", "unitPrice": 600, "qty": 1, "cost": 600, "sells": [{"id": "s1", "qty": 1, "unitPrice": 785.08, "total": 785.08}], "status": "已售出", "source": "自己收的", "profit": 185.08}, {"id": 45, "name": "鬼龙sr", "unitPrice": 1000, "qty": 1, "cost": 1000, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 46, "name": "水伊布ex sar", "unitPrice": 238, "qty": 1, "cost": 238, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 47, "name": "牡丹", "unitPrice": 40, "qty": 3, "cost": 120, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 48, "name": "火恐龙", "unitPrice": 40, "qty": 1, "cost": 40, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 49, "name": "杰尼龟", "unitPrice": 30, "qty": 1, "cost": 30, "sells": [{"id": "s1", "qty": 1, "unitPrice": 106.82, "total": 106.82}], "status": "已售出", "source": "自己收的", "profit": 76.82}, {"id": 50, "name": "卡米龟", "unitPrice": 25, "qty": 1, "cost": 25, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 51, "name": "刃鬼3星", "unitPrice": 75.1, "qty": 1, "cost": 75.1, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 52, "name": "耿鬼vm", "unitPrice": 7.2, "qty": 2, "cost": 14.4, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 53, "name": "喵喵3星", "unitPrice": 120, "qty": 1, "cost": 120, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 54, "name": "刃鬼3星", "unitPrice": 60, "qty": 2, "cost": 120, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 55, "name": "梦妖魔3星", "unitPrice": 20, "qty": 1, "cost": 20, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 56, "name": "刃鬼3星", "unitPrice": 52, "qty": 1, "cost": 52, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 57, "name": "喷火龙ex", "unitPrice": 9, "qty": 1, "cost": 9, "sells": [{"id": "s1", "qty": 1, "unitPrice": 9.0, "total": 9.0}], "status": "已售出", "source": "自己收的", "profit": 0.0}, {"id": 58, "name": "铁包袱", "unitPrice": 9, "qty": 1, "cost": 9, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 59, "name": "刃鬼3星", "unitPrice": 45, "qty": 5, "cost": 225, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 60, "name": "水晶灯3星", "unitPrice": 20, "qty": 1, "cost": 20, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 61, "name": "派帕", "unitPrice": 180, "qty": 1, "cost": 180, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 62, "name": "电影超梦原包", "unitPrice": 164, "qty": 1, "cost": 164, "sells": [{"id": "s1", "qty": 1, "unitPrice": 380.0, "total": 380.0}], "status": "已售出", "source": "自己收的", "profit": 216.0}, {"id": 63, "name": "插画甲贺忍蛙", "unitPrice": 80, "qty": 1, "cost": 80, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 64, "name": "海豚侠ex", "unitPrice": 48, "qty": 1, "cost": 48, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 65, "name": "喷火龙vstar", "unitPrice": 170, "qty": 1, "cost": 170, "sells": [{"id": "s1", "qty": 1, "unitPrice": 244.16, "total": 244.16}], "status": "已售出", "source": "自己收的", "profit": 74.16}, {"id": 66, "name": "超梦vstar", "unitPrice": 160, "qty": 1, "cost": 160, "sells": [{"id": "s1", "qty": 1, "unitPrice": 244.16, "total": 244.16}], "status": "已售出", "source": "自己收的", "profit": 84.16}, {"id": 67, "name": "利欧路", "unitPrice": 13, "qty": 1, "cost": 13, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 68, "name": "火箭队的迷你q", "unitPrice": 23, "qty": 1, "cost": 23, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 69, "name": "N的捷克罗姆", "unitPrice": 56, "qty": 1, "cost": 56, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 70, "name": "mage雪妖女", "unitPrice": 18, "qty": 1, "cost": 18, "sells": [{"id": "s1", "qty": 1, "unitPrice": 25.0, "total": 25.0}], "status": "已售出", "source": "自己收的", "profit": 7.0}, {"id": 71, "name": "mage鳗鱼王", "unitPrice": 12, "qty": 1, "cost": 12, "sells": [{"id": "s1", "qty": 1, "unitPrice": 20.0, "total": 20.0}], "status": "已售出", "source": "自己收的", "profit": 8.0}, {"id": 72, "name": "mega沙奈朵", "unitPrice": 40, "qty": 1, "cost": 40, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 73, "name": "mega蒂安西", "unitPrice": 21, "qty": 1, "cost": 21, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 74, "name": "Mega卢卡利欧", "unitPrice": 40, "qty": 1, "cost": 40, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 75, "name": "Mega摔跤鹰人", "unitPrice": 12, "qty": 1, "cost": 12, "sells": [{"id": "s1", "qty": 1, "unitPrice": 20.0, "total": 20.0}], "status": "已售出", "source": "自己收的", "profit": 8.0}, {"id": 76, "name": "mega耿鬼", "unitPrice": 133.6, "qty": 1, "cost": 133.6, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 77, "name": "奇树的大电海燕", "unitPrice": 21, "qty": 1, "cost": 21, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 78, "name": "Mega流氓头头", "unitPrice": 14, "qty": 1, "cost": 14, "sells": [{"id": "s1", "qty": 1, "unitPrice": 20.0, "total": 20.0}], "status": "已售出", "source": "自己收的", "profit": 6.0}, {"id": 79, "name": "海豚侠ex", "unitPrice": 51, "qty": 1, "cost": 51, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 80, "name": "mega巨牙鲨sar", "unitPrice": 40, "qty": 1, "cost": 40, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 81, "name": "Mega流氓头头", "unitPrice": 7, "qty": 1, "cost": 7, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 82, "name": "mega 快龙", "unitPrice": 58, "qty": 1, "cost": 58, "sells": [{"id": "s1", "qty": 1, "unitPrice": 120.0, "total": 120.0}], "status": "已售出", "source": "自己收的", "profit": 62.0}, {"id": 83, "name": "ace枪", "unitPrice": 200, "qty": 1, "cost": 200, "sells": [{"id": "s1", "qty": 1, "unitPrice": 216.95, "total": 216.95}], "status": "已售出", "source": "自己收的", "profit": 16.95}, {"id": 84, "name": "mega 快龙", "unitPrice": 55, "qty": 2, "cost": 110, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 85, "name": "Mega卢卡利欧", "unitPrice": 33, "qty": 1, "cost": 33, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 86, "name": "忍蛙sar", "unitPrice": 514, "qty": 1, "cost": 514, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 87, "name": "忍蛙sar", "unitPrice": 474, "qty": 1, "cost": 474, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 88, "name": "古简蜗ex", "unitPrice": 17.3, "qty": 1, "cost": 17.3, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 89, "name": "赛富豪ex", "unitPrice": 11.9, "qty": 1, "cost": 11.9, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 90, "name": "耿鬼ex", "unitPrice": 44, "qty": 1, "cost": 44, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 91, "name": "排帕sar", "unitPrice": 117, "qty": 4, "cost": 468, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 92, "name": "mega喷火龙", "unitPrice": 190, "qty": 1, "cost": 190, "sells": [{"id": "s1", "qty": 1, "unitPrice": 291.5, "total": 291.5}], "status": "已售出", "source": "自己收的", "profit": 101.5}, {"id": 93, "name": "闪耀时拉比", "unitPrice": 21, "qty": 3, "cost": 63, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 94, "name": "闪耀凤王", "unitPrice": 24, "qty": 3, "cost": 72, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 95, "name": "闪耀洛奇亚", "unitPrice": 47.4, "qty": 3, "cost": 142.2, "sells": [{"id": "s1", "qty": 1, "unitPrice": 270.89, "total": 270.89}], "status": "已售出", "source": "自己收的", "profit": 128.69}, {"id": 96, "name": "闪耀阿尔宙斯", "unitPrice": 23.2, "qty": 4, "cost": 92.8, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 97, "name": "猛雷鼓sr", "unitPrice": 13, "qty": 2, "cost": 26, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 98, "name": "30周年草苗龟", "unitPrice": 12, "qty": 1, "cost": 12, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 99, "name": "30周年木木枭", "unitPrice": 20, "qty": 1, "cost": 20, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 100, "name": "30周年火斑喵", "unitPrice": 15, "qty": 1, "cost": 15, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 101, "name": "呆火鳄3星", "unitPrice": 7.28, "qty": 1, "cost": 7.28, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 102, "name": "长耳兔tt", "unitPrice": 8.8, "qty": 1, "cost": 8.8, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 103, "name": "沙奈朵tt", "unitPrice": 35.66, "qty": 1, "cost": 35.66, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 104, "name": "不公印章", "unitPrice": 39.88, "qty": 1, "cost": 39.88, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 105, "name": "洛奇亚sr", "unitPrice": 556, "qty": 1, "cost": 556, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 106, "name": "超级蒂安希ma", "unitPrice": 30, "qty": 1, "cost": 30, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 107, "name": "超级雪妖女ma", "unitPrice": 30, "qty": 1, "cost": 30, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 108, "name": "超级摔跤鹰人", "unitPrice": 30, "qty": 1, "cost": 30, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 109, "name": "P10荷叶皮卡丘（简中）", "unitPrice": 988, "qty": 1, "cost": 988, "sells": [{"id": "s1", "qty": 1, "unitPrice": 1500.0, "total": 1500.0}], "status": "已售出", "source": "自己收的", "profit": 512.0}];
+
+const STORAGE_KEY = 'kajia_card_data';
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function formatMoney(val) {
+  if (val === null || val === undefined || val === '') return '—';
+  if (typeof val === 'string') return val;
+  return '¥' + val.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmt(val) {
+  if (val === null || val === undefined) return '—';
+  return String(val);
+}
+function calcProfit(cost, sellPrice) {
+  if (cost === null || sellPrice === null || sellPrice === undefined) return null;
+  const c = typeof cost === 'number' ? cost : parseFloat(cost);
+  const s = typeof sellPrice === 'number' ? sellPrice : parseFloat(sellPrice);
+  if (isNaN(c) || isNaN(s)) return null;
+  return s - c;
+}
+function round2(v) { return Math.round(v * 100) / 100; }
+function generateId(items) {
+  return items.length > 0 ? Math.max(...items.map(i => i.id)) + 1 : 1;
+}
+
+
+
+// ── Components ─────────────────────────────────────────────────────────────────
+
+// Toast notification
+function Toast({ message, onDone }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 2500);
+    return () => clearTimeout(t);
+  }, [onDone]);
+  return <div className="toast">{message}</div>;
+}
+
+
+// 缓存：图片base64前缀 -> 编号（从cardimg文件夹动态匹配，支持png/webp）
+let cardCodeCache = null;
+let cardCacheReady = false;
+
+async function buildCardCodeCache() {
+  if (cardCodeCache) return;
+  cardCodeCache = {};
+  try {
+    // 动态扫描 cardimg 文件夹
+    const resp = await fetch('./cardimg/');
+    if (!resp.ok) throw new Error('fetch failed');
+    const text = await resp.text();
+    const matches = text.matchAll(/href="([A-Za-z0-9.]+\.(?:png|webp))"/g);
+    const fileNames = [...matches].map(m => m[1]);
+    
+    // 预加载所有图片的 base64 前缀
+    const promises = fileNames.map(async name => {
+      try {
+        const r = await fetch('./cardimg/' + name);
+        if (!r.ok) return;
+        const blob = await r.blob();
+        const base64 = await new Promise(res => {
+          const reader = new FileReader();
+          reader.onloadend = () => res(reader.result);
+          reader.readAsDataURL(blob);
+        });
+        const code = name.replace(/\.(png|webp)$/i, '');
+        // 存多个长度的前缀以提高匹配精度
+        cardCodeCache[base64.slice(0, 80)] = code;
+        cardCodeCache[base64.slice(0, 50)] = code;
+      } catch {}
+    });
+    await Promise.all(promises);
+    cardCacheReady = true;
+  } catch {
+    console.warn('cardimg 缓存构建失败，可能未通过服务器访问');
+    cardCacheReady = true;
+  }
+}
+
+async function getCardCodeFromCache(url) {
+  if (!url || !url.startsWith('data:')) return '';
+  await buildCardCodeCache();
+  for (const [key, code] of Object.entries(cardCodeCache)) {
+    if (url.startsWith(key)) return code;
+  }
+  return '';
+}
+
+// 从 imageUrl 提取编号：支持URL路径和base64格式
+const extractCardCode = (url) => {
+  if (!url) return '';
+  // 1. 尝试从URL路径提取 (cardimg/CSM2bC-034.png -> CSM2bC-034)
+  const match = url.match(/cardimg\/([A-Za-z0-9.]+[-–]?\d+)\.png/i);
+  if (match) return match[1];
+  return ''; // base64的编号由getCardCodeFromCache异步获取
+};
+
+function EditModal({ item, onSave, onClose, onToast }) {
+  const [form, setForm] = useState({
+    name: item.name,
+    imageUrl: item.imageUrl || '',
+    cardCode: '', // base64的图片编号异步加载
+    unitPrice: item.unitPrice ?? '',
+    qty: item.qty ?? '',
+    cost: item.cost ?? '',
+    status: item.status,
+    sells: (item.sells || []).map(s => ({ ...s }))
+  });
+  const [isLoadingImage, setIsLoadingImage] = useState(false);
+  
+  // 初始化：优先读取 item.cardCode，其次从URL路径或cardimg缓存获取
+  React.useEffect(() => {
+    // 1. 优先用 item.cardCode（批量导入时已存储）
+    if (item.cardCode) {
+      setForm(prev => ({ ...prev, cardCode: item.cardCode }));
+      return;
+    }
+    // 2. 从URL路径提取
+    const url = item.imageUrl || '';
+    if (!url) return;
+    const urlCode = extractCardCode(url);
+    if (urlCode) {
+      setForm(prev => ({ ...prev, cardCode: urlCode }));
+      return;
+    }
+    // 3. base64格式：从cardimg缓存匹配
+    getCardCodeFromCache(url).then(code => {
+      if (code) setForm(prev => ({ ...prev, cardCode: code }));
+    });
+  }, [item.imageUrl, item.cardCode]);
+
+  function update(field, value) {
+    setForm(prev => ({ ...prev, [field]: value }));
+  }
+
+  // 获取卡牌图片 (使用 tcg.mik.moe)
+  async function fetchCardImage(cardCode) {
+    if (!cardCode) {
+      alert('请输入卡牌编号');
+      return;
+    }
+
+    // 解析编号：CSM2bC-034 → set=CSM2bC, num=034
+    const match = cardCode.match(/^([A-Za-z0-9.]+)[C]?-(\d+)/);
+    if (!match) {
+      alert('编号格式不正确，请使用如：CSM2bC-034');
+      return;
+    }
+
+    const setCode = match[1];
+    const cardNum = match[2].padStart(3, '0'); // 确保 3 位数 34 → 034
+
+    setIsLoadingImage(true);
+
+    try {
+      // 尝试 tcg.mik.moe 图片源 (PNG格式)
+      const url = `https://tcg.mik.moe/static/img/${setCode}/${cardNum}.png`;
+      console.log('尝试下载:', url);
+
+      const response = await fetch(url);
+      if (response.ok) {
+        const blob = await response.blob();
+        const reader = new FileReader();
+        reader.onload = () => {
+          setForm(prev => ({ ...prev, imageUrl: reader.result, cardCode: cardCode }));
+          setIsLoadingImage(false);
+          const input = document.getElementById('cardCodeInput');
+          if (input) input.value = cardCode;
+          onToast?.(`✅ 图片已获取，编号 ${cardCode} 已关联（请点击保存）`);
+        };
+        reader.onerror = () => {
+          alert('❌ 图片转换失败');
+          setIsLoadingImage(false);
+        };
+        reader.readAsDataURL(blob);
+      } else {
+        alert(`❌ 图片不存在，HTTP ${response.status}`);
+        setIsLoadingImage(false);
+      }
+    } catch (e) {
+      console.error('下载失败:', e);
+      alert('❌ 下载失败: ' + e.message);
+      setIsLoadingImage(false);
+    }
+  }
+
+  function updateSell(idx, field, value) {
+    setForm(prev => {
+      const sells = prev.sells.map((s, i) => {
+        if (i !== idx) return s;
+        const updated = { ...s, [field]: value === '' ? '' : parseFloat(value) };
+        if (field === 'qty' || field === 'unitPrice') {
+          const q = field === 'qty' ? parseFloat(value) || 0 : (s.qty || 0);
+          const u = field === 'unitPrice' ? parseFloat(value) || 0 : (s.unitPrice || 0);
+          updated.total = q * u;
+        }
+        return updated;
+      });
+      return { ...prev, sells };
+    });
+  }
+
+  function addSell() {
+    setForm(prev => ({
+      ...prev,
+      sells: [...prev.sells, { id: 's' + Date.now(), qty: 1, unitPrice: '', total: 0 }]
+    }));
+  }
+
+  function removeSell(idx) {
+    setForm(prev => ({ ...prev, sells: prev.sells.filter((_, i) => i !== idx) }));
+  }
+
+  function handleSave() {
+    const cost = form.cost === '' ? 0 : parseFloat(form.cost);
+    const totalSell = form.sells.reduce((sum, s) => sum + (s.total || 0), 0);
+    const profit = totalSell > 0 ? round2(totalSell - cost) : null;
+    // 保留图片和编号：优先用表单值，否则用原值
+    const savedCardCode = form.cardCode || item.cardCode || null;
+    const savedImageUrl = form.imageUrl.trim() || item.imageUrl || null;
+    onSave({
+      ...item,
+      name: form.name.trim(),
+      imageUrl: savedImageUrl,
+      cardCode: savedCardCode,
+      unitPrice: form.unitPrice === '' ? null : parseFloat(form.unitPrice),
+      qty: form.qty === '' ? 1 : parseInt(form.qty),
+      cost,
+      sells: form.sells.filter(s => s.total > 0),
+      status: form.status,
+      profit
+    });
+  }
+
+  const totalSell = form.sells.reduce((sum, s) => sum + (s.total || 0), 0);
+  const cost = form.cost === '' ? 0 : parseFloat(form.cost);
+  const remaining = (parseInt(form.qty) || 0) - form.sells.reduce((sum, s) => sum + (parseInt(s.qty) || 0), 0);
+  const profit = totalSell > 0 ? round2(totalSell - cost) : null;
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-header">
+          <div className="modal-title">编辑卡牌</div>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        <div className="modal-body">
+          {/* 基本信息区块 */}
+          <div className="modal-section-title">基本信息</div>
+          <div className="form-group">
+            <input className="form-input" style={{fontSize:16,fontWeight:600}} value={form.name} onChange={e => update('name', e.target.value)} placeholder="卡牌名称" />
+          </div>
+          {/* 宝可梦卡牌编号搜索 */}
+          <div className="form-group">
+            <label className="form-label">
+              宝可梦卡牌编号
+              <span style={{fontSize:11,color:'#6e7681',fontWeight:400,marginLeft:8}}>输入编号自动获取图片</span>
+            </label>
+            <div style={{display:'flex',gap:8,alignItems:'flex-start'}}>
+              <input
+                className="form-input"
+                id="cardCodeInput"
+                style={{flex:1, minWidth:160, fontSize:13}}
+                placeholder={form.cardCode || "如：CSM2bC-034"}
+                defaultValue={form.cardCode}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    const input = document.getElementById('cardCodeInput');
+                    if (input) fetchCardImage(input.value.trim());
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="btn"
+                disabled={isLoadingImage}
+                style={{background: isLoadingImage ? 'rgba(168,85,247,0.3)' : 'rgba(168,85,247,0.15)',color:'#c084fc',border:'1px solid rgba(168,85,247,0.3)',padding:'8px 12px',fontSize:12,whiteSpace:'nowrap',cursor: isLoadingImage ? 'wait' : 'pointer'}}
+                onClick={() => {
+                  const input = document.getElementById('cardCodeInput');
+                  if (input) fetchCardImage(input.value.trim());
+                }}
+              >{isLoadingImage ? '⏳ 获取中...' : '⚡ 获取图片'}</button>
+            </div>
+            {form.cardCode && (
+              <div style={{fontSize:11,color:'#22c55e',marginTop:4}}>
+                ✓ 已关联编号：{form.cardCode}
+              </div>
+            )}
+          </div>
+          <div className="form-group">
+            <label className="form-label">
+              商品图 URL
+              <button
+                type="button"
+                style={{marginLeft:12, fontSize:12, padding:'2px 10px', borderRadius:20, border:'1px solid #1e3a5f', background:'#1e3a5f', color:'#60a5fa', cursor:'pointer'}}
+                onClick={() => window.open(`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(form.name + ' 宝可梦卡牌')}`, '_blank')}
+              >🔍 搜索图片</button>
+            </label>
+                <div style={{display:'flex',gap:8,alignItems:'flex-start',flexWrap:'wrap'}}>
+              <input
+                className="form-input"
+                style={{flex:1, minWidth:200, fontSize:13}}
+                value={form.imageUrl}
+                onChange={e => update('imageUrl', e.target.value)}
+                placeholder="https://... 或粘贴图片URL"
+              />
+              <button
+                type="button"
+                className="btn"
+                style={{background:'rgba(88,166,255,0.15)',color:'#58a6ff',border:'1px solid rgba(88,166,255,0.3)',padding:'8px 12px',fontSize:12,whiteSpace:'nowrap'}}
+                onClick={() => window.open(`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(form.name + ' 宝可梦卡牌')}`, '_blank')}
+              >🔍 搜索</button>
+              <label style={{background:'rgba(34,197,94,0.15)',color:'#22c55e',border:'1px solid rgba(34,197,94,0.3)',padding:'8px 12px',borderRadius:6,fontSize:12,cursor:'pointer',whiteSpace:'nowrap'}}>
+                📤 上传
+                <input type="file" accept="image/*" style={{display:'none'}} onChange={e => {
+                  const file = e.target.files[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = ev => { update('imageUrl', ev.target.result); };
+                    reader.readAsDataURL(file);
+                  }
+                }} />
+              </label>
+            </div>
+            {form.imageUrl && form.imageUrl.startsWith('http') && !form.imageUrl.includes('data:') && (
+              <div style={{fontSize:11,color:'#f59e0b',marginTop:4}}>
+                ⚠️ 提示：网络图片可能因访问限制无法显示，建议使用「📤 上传」功能
+              </div>
+            )}
+            <div style={{display:'flex',gap:12,alignItems:'flex-start',marginTop:8}}>
+              {form.imageUrl ? (
+                <img
+                  src={form.imageUrl}
+                  alt="预览"
+                  style={{width:80,height:80,objectFit:'contain',borderRadius:8,border:'1px solid var(--border)',background:'#1c2a45'}}
+                  onError={e => { e.target.style.display='none'; }}
+                />
+              ) : (
+                <div style={{width:80,height:80,borderRadius:8,border:'1px dashed #1e3a5f',background:'#1c2a45',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,cursor:'pointer',flexShrink:0}} title="点击搜索图片" onClick={() => window.open(`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(form.name + ' 宝可梦卡牌')}`, '_blank')}>🔍</div>
+              )}
+              {form.imageUrl && (
+                <span style={{fontSize:11,color:'#6e7681',alignSelf:'center'}}>
+                  {form.imageUrl.startsWith('data:') ? '📎 本地图片 (已内嵌)' : '🔗 网络图片'}
+                </span>
+              )}
+            </div>
+            {form.imageUrl && (
+              <div style={{marginTop:8,display:'flex',alignItems:'center',gap:8}}>
+                <img src={form.imageUrl} alt="大预览" style={{maxWidth:'100%',maxHeight:200,objectFit:'contain',borderRadius:8,border:'1px solid var(--border)'}} onError={e => e.target.style.display='none'} />
+              </div>
+            )}
+          </div>
+          <div className="form-row" style={{gridTemplateColumns:'1fr 1fr 1fr'}}>
+            <div className="form-group">
+              <label className="form-label">单价 (¥)</label>
+              <input className="form-input" type="number" step="0.01" value={form.unitPrice} onChange={e => update('unitPrice', e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">数量</label>
+              <input className="form-input" type="number" value={form.qty} onChange={e => update('qty', e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">成本 (¥)</label>
+              <input className="form-input" type="number" step="0.01" value={form.cost} onChange={e => update('cost', e.target.value)} />
+            </div>
+          </div>
+          <div style={{display:'flex',gap:8,alignItems:'center',fontSize:13,color:'var(--text-2)',marginBottom:4}}>
+            剩余 <strong style={{color: remaining >= 0 ? 'var(--text)' : 'var(--red)',fontSize:15}}>{remaining}</strong> 张
+          </div>
+
+          {/* 售出记录区块 */}
+          <div className="modal-section-title" style={{marginTop:20}}>售出记录</div>
+          {form.sells.length === 0 ? (
+            <div style={{textAlign:'center',color:'#64748b',fontSize:13,padding:'12px 0',border:'1px dashed #1e3a5f',borderRadius:8,marginBottom:8}}>
+              暂无售出记录
+            </div>
+          ) : (
+            <div style={{display:'flex',flexDirection:'column',gap:8}}>
+              {form.sells.map((sell, idx) => (
+                <div key={sell.id} style={{display:'flex',gap:6,alignItems:'center'}}>
+                  <input className="form-input" type="number" placeholder="数量" value={sell.qty || ''} min={1}
+                    onChange={e => updateSell(idx, 'qty', e.target.value)}
+                    style={{width:60}} />
+                  <span style={{fontSize:12,color:'var(--text-2)'}}>张 ×</span>
+                  <input className="form-input" type="number" step="0.01" placeholder="单价/张"
+                    value={sell.unitPrice === 0 ? '' : (sell.unitPrice || '')}
+                    onChange={e => updateSell(idx, 'unitPrice', e.target.value)}
+                    style={{flex:1}} />
+                  <span style={{fontSize:12,color:'var(--text-2)'}}>=</span>
+                  <div style={{fontWeight:600,color:'var(--green)',minWidth:70,textAlign:'right',fontSize:14}}>
+                    ¥{sell.total.toFixed(2)}
+                  </div>
+                  <button className="btn btn-danger" style={{padding:'6px 8px',fontSize:12,color:'#ef4444',background:'#2d1212',border:'1px solid #7f1d1d'}} onClick={() => removeSell(idx)}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <button className="btn btn-secondary" style={{width:'100%',marginTop:8}} onClick={addSell}>+ 添加售出记录</button>
+
+          {/* 状态选择 */}
+          <div className="modal-section-title" style={{marginTop:20}}>状态</div>
+          <div className="status-options">
+            <div className={`status-option ${form.status === '未售出' ? 'selected-unsold' : ''}`} onClick={() => update('status', '未售出')}>未售出</div>
+            <div className={`status-option ${form.status === '已售出' ? 'selected-sold' : ''}`} onClick={() => update('status', '已售出')}>已售出</div>
+            <div className={`status-option ${form.status === '待签收' ? 'selected-signed' : ''}`} onClick={() => update('status', '待签收')}>待签收</div>
+          </div>
+
+          {/* 利润预估 */}
+          <div className="profit-summary" style={{marginTop:16}}>
+            {form.sells.length > 0 && (
+              <>
+                <div className="profit-row">
+                  <span>已售总价</span><span style={{color:'var(--green)',fontWeight:600}}>¥{totalSell.toFixed(2)}</span>
+                </div>
+                <div className="profit-row">
+                  <span>成本</span><span>¥{cost.toFixed(2)}</span>
+                </div>
+                <div className="profit-row" style={{borderTop:'1px solid var(--border)',paddingTop:8,marginTop:4}}>
+                  <span>预估利润</span>
+                  <span style={{color: profit >= 0 ? 'var(--green)' : 'var(--red)', fontWeight:700, fontSize:16}}>
+                    {profit !== null ? (profit >= 0 ? '+¥' + profit.toFixed(2) : '-¥' + Math.abs(profit).toFixed(2)) : '—'}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={onClose}>取消</button>
+          <button className="btn btn-primary" onClick={handleSave}>保存</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Add Card Form — 简化版
+function AddCardForm({ onAdd, onCancel }) {
+  const [form, setForm] = useState({
+    name: '', unitPrice: '', qty: '1', cost: '',
+    status: '未售出',
+    sells: []
+  });
+  
+  // 成本自动计算 = 单价 × 数量
+  function update(field, value) {
+    setForm(prev => {
+      const next = { ...prev, [field]: value };
+      if (field === 'unitPrice' || field === 'qty') {
+        const price = parseFloat(field === 'unitPrice' ? value : prev.unitPrice) || 0;
+        const qty = parseInt(field === 'qty' ? value : prev.qty) || 1;
+        next.cost = String((price * qty).toFixed(2));
+      }
+      return next;
+    });
+  }
+  
+  function handleSubmit(e) {
+    e.preventDefault();
+    if (!form.name.trim()) return;
+    const cost = form.cost === '' ? 0 : parseFloat(form.cost);
+    const totalSell = form.sells.reduce((sum, s) => sum + (s.total || 0), 0);
+    onAdd({
+      name: form.name.trim(),
+      unitPrice: form.unitPrice === '' ? null : parseFloat(form.unitPrice),
+      qty: form.qty === '' ? 1 : parseInt(form.qty),
+      cost,
+      sells: form.sells,
+      status: form.status,
+      source: '手动添加',
+      profit: totalSell > 0 ? round2(totalSell - cost) : null
+    });
+    setForm({ name: '', unitPrice: '', qty: '1', cost: '', status: '未售出', sells: [] });
+  }
+  return (
+    <div className="add-form">
+      <div className="add-form-card">
+        <div className="add-form-title">+ 添加新卡牌</div>
+        <form className="add-form-grid" onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label className="form-label">卡牌名称 *</label>
+            <input className="form-input" value={form.name} onChange={e => update('name', e.target.value)} placeholder="如：梦幻ex sar" required />
+          </div>
+          <div className="form-group">
+            <label className="form-label">单价 (¥)</label>
+            <input className="form-input" type="number" step="0.01" value={form.unitPrice} onChange={e => update('unitPrice', e.target.value)} placeholder="0.00" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">数量</label>
+            <input className="form-input" type="number" value={form.qty} onChange={e => update('qty', e.target.value)} min="1" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">成本 (¥) <span style={{fontSize:11,color:'#6e7681'}}>自动=单价×数量</span></label>
+            <input className="form-input" type="number" step="0.01" value={form.cost} onChange={e => update('cost', e.target.value)} placeholder="自动计算" />
+          </div>
+          <div className="form-group" style={{gridColumn:'1 / -1'}}>
+            <label className="form-label">状态</label>
+            <div className="status-options">
+              <div className={`status-option ${form.status === '未售出' ? 'selected-unsold' : ''}`} onClick={() => update('status', '未售出')}>未售出</div>
+              <div className={`status-option ${form.status === '已售出' ? 'selected-sold' : ''}`} onClick={() => update('status', '已售出')}>已售出</div>
+              <div className={`status-option ${form.status === '待签收' ? 'selected-signed' : ''}`} onClick={() => update('status', '待签收')}>待签收</div>
+            </div>
+          </div>
+          <div className="form-group">
+            <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>添加</button>
+          </div>
+          <div className="form-group">
+            <button type="button" className="btn btn-secondary" style={{ width: '100%' }} onClick={onCancel}>取消</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// Batch Image Modal
+function BatchImageModal({ items, onUpdate, onClose, showToast }) {
+  const [text, setText] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // 根据编号构造图片URL - 支持多种格式
+  function buildImageUrl(cardCode) {
+    if (!cardCode) return null;
+    
+    // 清理输入：去掉斜杠后面的总卡数、空白等
+    let cleaned = cardCode.trim().replace(/\s*\/\d+\s*$/, '').trim();
+    
+    let series = '';
+    let num = '';
+    
+    // 格式1: 字母开头系列-数字 (如 CSM2bC-034)
+    let match = cleaned.match(/^([A-Za-z][A-Za-z0-9]*)-(\d+)$/);
+    if (match) {
+      series = match[1];
+      num = match[2];
+    }
+    
+    // 格式2: 数字开头系列-数字 (如 151C-189、135C-189)
+    if (!series) {
+      match = cleaned.match(/^([A-Za-z0-9]*[A-Za-z])-(\d+)$/);
+      if (match) {
+        series = match[1];
+        num = match[2];
+      }
+    }
+    
+    // 格式3: 带点号的系列 (如 CS6.5C-054)
+    if (!series) {
+      match = cleaned.match(/^([A-Za-z][A-Za-z0-9]*\.[A-Za-z0-9]+)-(\d+)$/);
+      if (match) {
+        series = match[1];
+        num = match[2];
+      }
+    }
+    
+    // 格式4: 无分隔符 (如 CSM2bC167 -> CSM2bC/167)
+    // 规则：系列名以字母结尾，卡号2-3位
+    if (!series) {
+      match = cleaned.match(/^([A-Za-z][A-Za-z0-9]+)(\d{2,3})$/);
+      if (match) {
+        series = match[1];
+        num = match[2];
+        // 如果系列名仍然以数字结尾，进一步调整
+        while (series.length > 2 && /[0-9]$/.test(series)) {
+          num = series.slice(-1) + num;
+          series = series.slice(0, -1);
+        }
+      }
+    }
+    
+    // 格式5: 纯3位数字 (如 189，无法确定系列)
+    if (!series) {
+      match = cleaned.match(/^(\d{3})$/);
+      if (match) {
+        return null; // 需要系列号
+      }
+    }
+    
+    if (!series || !num) return null;
+    
+    // 确保卡号是3位数字
+    num = String(num).padStart(3, '0');
+    
+    return 'https://tcg.mik.moe/static/img/' + series + '/' + num + '.png';
+  }
+
+  // 从URL下载并转为base64
+  async function downloadAsBase64(url) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) return null;
+      const blob = await response.blob();
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async function handleApply() {
+    const lines = text.trim().split('\n').filter(l => l.trim());
+    if (lines.length === 0) {
+      showToast('⚠️ 请输入卡牌数据');
+      return;
+    }
+
+    setLoading(true);
+    let updated = 0;
+    let skipped = 0;
+    const cardMap = {}; // 缓存: 编号 -> base64 URL
+
+    // 解析输入并下载图片
+    for (const line of lines) {
+      const parts = line.split(/[\t,]/); // 支持 Tab 或逗号分隔
+      const name = parts[0]?.trim();
+      const code = parts[1]?.trim();
+      
+      if (!name || !code) continue;
+
+      // 查找匹配的卡牌
+      const matchItem = items.find(item => 
+        item.name.includes(name) || name.includes(item.name)
+      );
+
+      if (!matchItem) {
+        skipped++;
+        continue;
+      }
+
+      // 下载图片
+      const url = buildImageUrl(code);
+      if (!url) {
+        skipped++;
+        continue;
+      }
+
+      if (!cardMap[code]) {
+        const base64 = await downloadAsBase64(url);
+        if (base64) {
+          cardMap[code] = base64;
+        }
+      }
+
+      if (cardMap[code]) {
+        updated++;
+      }
+    }
+
+    // 更新卡牌数据
+    const newItems = items.map(item => {
+      for (const line of lines) {
+        const parts = line.split(/[\t,]/);
+        const name = parts[0]?.trim();
+        const code = parts[1]?.trim();
+        
+        if (code && cardMap[code] && (item.name.includes(name) || name.includes(item.name))) {
+          return { ...item, imageUrl: cardMap[code], cardCode: code };
+        }
+      }
+      return item;
+    });
+
+    setLoading(false);
+
+    if (updated > 0) {
+      onUpdate(newItems);
+      showToast(`✅ 成功更新 ${updated} 张卡牌的图片${skipped > 0 ? `（${skipped}条跳过）` : ''}`);
+      onClose();
+    } else {
+      showToast('⚠️ 没有找到匹配的卡牌或图片下载失败');
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{maxWidth:600}}>
+        <div className="modal-header">
+          <div className="modal-title">🖼️ 批量添加图片</div>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        <div className="modal-body">
+          <p style={{color:'#8b949e', fontSize:13, margin:'0 0 16px'}}>
+            每行格式：<code style={{background:'#1c2a45',padding:'2px 6px',borderRadius:4}}>卡牌名称	编号</code><br/>
+            示例：<code style={{background:'#1c2a45',padding:'2px 6px',borderRadius:4}}>超梦tt	CSM2bC-034</code>
+          </p>
+          <textarea
+            value={text}
+            onChange={e => setText(e.target.value)}
+            placeholder="超梦tt	CSM2bC-034
+超梦tt sr	CSM2bC-164
+暴击蚊	CSM2bC-158
+龙柱v sr	CS6.5C-082"
+            style={{
+              width:'100%', minHeight:200, background:'#0d1117', border:'1px solid #30363d',
+              borderRadius:8, color:'#c9d1d9', padding:12, fontSize:13, fontFamily:'monospace',
+              resize:'vertical', boxSizing:'border-box'
+            }}
+          />
+          <div style={{display:'flex', gap:12, marginTop:16}}>
+            <button 
+              className="btn btn-primary" 
+              style={{flex:1}} 
+              onClick={handleApply}
+              disabled={loading}
+            >
+              {loading ? '下载中...' : '下载并应用'}
+            </button>
+            <button className="btn btn-secondary" style={{flex:1}} onClick={onClose}>取消</button>
+          </div>
+          <p style={{color:'#6e7681', fontSize:12, margin:'12px 0 0'}}>
+            💡 图片从 tcg.mik.moe 自动下载，编号格式如 CSM2bC-034
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Main App
+function App() {
+  const [zoomedImage, setZoomedImage] = useState(null);
+  const [activeTab, setActiveTab] = useState('main');
+  const [items, setItems] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Migrate old {sellQty, sellPrice} to new {sells[]} structure
+        // Also backfill cardCode from imageUrl for existing items
+        return parsed.map(i => {
+          if (i.sells === undefined) {
+            // Migrate sells structure
+            const sells = [];
+            const sp = i.sellPrice;
+            if (sp !== null && sp !== undefined && sp !== '') {
+              const spStr = String(sp);
+              if (spStr.replace('-','').replace('.','').isdigit()) {
+                sells.push({ id: 's1', qty: i.sellQty || 1, unitPrice: parseFloat(spStr), total: parseFloat(spStr) });
+              } else if (spStr === '100-100') {
+                sells.push({ id: 's1', qty: 1, unitPrice: 100, total: 100 });
+              }
+            }
+            const totalSell = sells.reduce((s, v) => s + v.total, 0);
+            const cost = i.cost || 0;
+            i = { ...i, sells, profit: totalSell > 0 ? round2(totalSell - cost) : null };
+          }
+          // Backfill cardCode from imageUrl if missing
+          if (i.imageUrl && !i.cardCode) {
+            const match = i.imageUrl.match(/cardimg\/([A-Za-z0-9.]+[-–]?\d+)\.(?:png|webp)/i);
+            if (match) i.cardCode = match[1];
+          }
+          return i;
+        });
+      }
+    } catch (e) {}
+    return INITIAL_DATA;
+  });
+  
+  // Merge imageUrl from INITIAL_DATA to localStorage data
+  useEffect(() => {
+    setItems(prev => {
+      const initialMap = {};
+      INITIAL_DATA.forEach(i => { if (i.imageUrl) initialMap[i.id] = i.imageUrl; });
+      let changed = false;
+      const merged = prev.map(item => {
+        if (initialMap[item.id] && !item.imageUrl) {
+          changed = true;
+          return { ...item, imageUrl: initialMap[item.id] };
+        }
+        return item;
+      });
+      return changed ? merged : prev;
+    });
+  }, []);
+  const [filter, setFilter] = useState('全部');
+  const [search, setSearch] = useState('');
+  const [sortField, setSortField] = useState('id');
+  const [sortDir, setSortDir] = useState('desc');
+  const [editingItem, setEditingItem] = useState(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [batchImage, setBatchImage] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 20;
+
+  // Persist to localStorage
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  }, [items]);
+
+  function showToast(msg) { setToast(msg); }
+
+  // Helper: get sortable value from item (supports computed fields)
+  const getSortVal = useCallback((item, field) => {
+    if (field === 'remaining') return (item.qty ?? 0) - (item.sells || []).reduce((s, v) => s + (v.qty || 0), 0);
+    if (field === 'soldValue') return (item.sells || []).reduce((s, v) => s + (v.total || 0), 0);
+    let val = item[field];
+    if (val === null || val === undefined) { return field === 'profit' ? -Infinity : (typeof items?.[0]?.[field] === 'number' ? -Infinity : ''); }
+    return val;
+  }, [items]);
+
+  // Filter + sort
+  const filtered = useMemo(() => {
+    let list = items;
+    if (filter === '已售出') list = list.filter(i => i.status === '已售出');
+    else if (filter === '待签收') list = list.filter(i => i.status === '待签收');
+    else if (filter === '未售出') list = list.filter(i => i.status === '未售出');
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(i => i.name.toLowerCase().includes(q));
+    }
+    // Sort — supports both direct fields and computed fields
+    list = [...list].sort((a, b) => {
+      const rawA = getSortVal(a, sortField);
+      const rawB = getSortVal(b, sortField);
+      // Handle string comparison
+      if (typeof rawA === 'string' && typeof rawB === 'string') {
+        const av = rawA.toLowerCase(), bv = rawB.toLowerCase();
+        if (av < bv) return sortDir === 'asc' ? -1 : 1;
+        if (av > bv) return sortDir === 'asc' ? 1 : -1;
+        return 0;
+      }
+      // Numeric comparison (nulls last)
+      const av = rawA ?? -Infinity;
+      const bv = rawB ?? -Infinity;
+      if (av < bv) return sortDir === 'asc' ? -1 : 1;
+      if (av > bv) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [items, filter, search, sortField, sortDir, getSortVal]);
+
+  // Pagination
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  function handleSort(field) {
+    if (sortField === field) { setSortDir(d => d === 'asc' ? 'desc' : 'asc'); }
+    else { setSortField(field); setSortDir('asc'); }
+    setPage(1);
+  }
+
+  function handleSave(updated) {
+    setItems(prev => prev.map(i => i.id === updated.id ? updated : i));
+    setEditingItem(null);
+    showToast('保存成功 ✓');
+  }
+
+  function handleAdd(newItem) {
+    const item = { ...newItem, id: generateId(items) };
+    setItems(prev => [item, ...prev]);
+    setShowAdd(false);
+    showToast('添加成功 ✓');
+  }
+
+  function handleDelete(id) {
+    if (!confirm('确定要删除这条记录吗？')) return;
+    setItems(prev => prev.filter(i => i.id !== id));
+    showToast('已删除');
+  }
+
+  function handleBulkMarkSigned() {
+    setItems(prev => prev.map(i => {
+      if (i.status === '未售出' && (i.sells || []).reduce((s, v) => s + (v.total || 0), 0) > 0) {
+        return { ...i, status: '待签收' };
+      }
+      return i;
+    }));
+    showToast('批量更新为待签收 ✓');
+  }
+
+  function exportCSV() {
+    const headers = ['ID', '名称', '单价', '数量', '已售数量', '剩余数量', '成本', '已售总收入', '利润', '状态', '来源'];
+    const sortedForExport = [...items].sort((a, b) => a.id - b.id);
+    const exportRows = sortedForExport.map(i => {
+      const sells = i.sells || [];
+      const totalSellQty = sells.reduce((s, v) => s + (v.qty || 0), 0);
+      const totalSellVal = sells.reduce((s, v) => s + (v.total || 0), 0);
+      const remaining = (i.qty || 0) - totalSellQty;
+      return [i.id, i.name, i.unitPrice ?? '', i.qty ?? '', totalSellQty, remaining, i.cost ?? '', totalSellVal || '', i.profit ?? '', i.status, i.source];
+    });
+    const csv = [headers, ...exportRows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = '卡价管理_' + new Date().toISOString().slice(0,10) + '.csv';
+    a.click(); URL.revokeObjectURL(url);
+    showToast('CSV 已下载 ✓');
+  }
+
+  function saveBackup() {
+    const backup = {
+      version: '1.0',
+      exportedAt: new Date().toISOString(),
+      items: items
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const date = new Date().toISOString().slice(0, 10);
+    a.href = url; a.download = '卡价备份_' + date + '.json';
+    a.click(); URL.revokeObjectURL(url);
+    showToast('备份已保存 ✓');
+  }
+
+  // Stats
+  const totalCards = items.reduce((sum, i) => sum + (i.qty || 1), 0);
+  const totalCost = items.reduce((sum, i) => sum + (i.cost || 0), 0);
+  const totalSoldValue = items.filter(i => i.status === '已售出').reduce((sum, i) => {
+    return sum + (i.sells || []).reduce((s, v) => s + (v.total || 0), 0);
+  }, 0);
+  const totalPendingValue = items.filter(i => i.status === '待签收').reduce((sum, i) => {
+    return sum + (i.sells || []).reduce((s, v) => s + (v.total || 0), 0);
+  }, 0);
+  const totalSoldCost = items.filter(i => i.status === '已售出' || i.status === '待签收').reduce((sum, i) => sum + (i.cost || 0), 0);
+  const totalEarned = totalSoldValue + totalPendingValue;
+  const toBreakEven = totalCost - totalEarned;
+  const totalProfit = items.reduce((sum, i) => {
+    if (i.status === '未售出') return sum;
+    const totalSell = (i.sells || []).reduce((s, v) => s + (v.total || 0), 0);
+    return sum + round2(totalSell - (i.cost || 0));
+  }, 0);
+  const soldCount = items.filter(i => i.status === '已售出').length;
+  const pendingCount = items.filter(i => i.status === '待签收').length;
+  const unsoldCount = items.filter(i => i.status === '未售出').length;
+
+  function SortIcon({ field }) {
+    if (sortField !== field) return <span className="sort-icon">⇅</span>;
+    return <span className="sort-icon">{sortDir === 'asc' ? '↑' : '↓'}</span>;
+  }
+
+  const statusBadgeClass = (item) => {
+    if (item.status === '已售出') return 'status-badge status-sold';
+    if (item.status === '待签收') return 'status-badge status-signed';
+    return 'status-badge status-unsold';
+  };
+  const statusBadgeText = (item) => {
+    if (item.status === '已售出') return '● 已售出';
+    if (item.status === '待签收') return '● 待签收';
+    return '○ 未售出';
+  };
+  const rowClass = (item) => {
+    if (item.status === '已售出') return 'status-sold';
+    if (item.status === '待签收') return 'status-signed';
+    return '';
+  };
+
+  return (
+    <div>
+      {/* Header */}
+      <header className="header">
+        <div className="header-inner">
+          <div className="header-title">
+            <div className="logo">
+              <svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="17" cy="17" r="16" fill="#1a1a2e" stroke="#444" strokeWidth="1"/>
+                <circle cx="17" cy="17" r="16" fill="url(#pb-grad)"/>
+                <rect x="1" y="16.5" width="32" height="1" fill="#1a1a2e"/>
+                <circle cx="17" cy="17" r="5.5" fill="#f5f5f5" stroke="#1a1a2e" strokeWidth="1.5"/>
+                <circle cx="17" cy="17" r="2.5" fill="#1a1a2e"/>
+                <defs>
+                  <linearGradient id="pb-grad" x1="17" y1="1" x2="17" y2="33" gradientUnits="userSpaceOnUse">
+                    <stop stopColor="#e53e3e"/>
+                    <stop offset="0.5" stopColor="#e53e3e"/>
+                    <stop offset="0.5" stopColor="#f5f5f5"/>
+                    <stop offset="1" stopColor="#f5f5f5"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+            卡价管理后台 <small>卡牌库存系统</small>
+          </div>
+          <div className="header-actions">
+            <button className="btn btn-secondary" onClick={saveBackup}>💾 保存备份</button>
+            <button className="btn btn-secondary" onClick={() => document.getElementById('importFileInput').click()}>📂 导入备份</button>
+            <input id="importFileInput" type="file" accept=".json" style={{display:'none'}} onChange={e => {
+              const file = e.target.files[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = ev => {
+                try {
+                  const data = JSON.parse(ev.target.result);
+                  const items = Array.isArray(data) ? data : (data.items || []);
+                  if (!Array.isArray(items) || items.length === 0) { showToast('文件格式错误'); return; }
+                  if (!confirm(`将导入 ${items.length} 条数据，当前数据将被覆盖，确定吗？`)) return;
+                  setItems(items);
+                  showToast('导入成功 ✓');
+                } catch { showToast('文件解析失败'); }
+              };
+              reader.readAsText(file);
+              e.target.value = '';
+            }} />
+            <button className="btn btn-secondary" onClick={exportCSV}>📥 导出 CSV</button>
+          </div>
+        </div>
+      </header>
+
+      {/* Tab Bar */}
+      <div style={{maxWidth:1400, margin:'0 auto', padding:'16px 32px 0', display:'flex', gap:8}}>
+        <button className={`filter-btn ${activeTab === 'main' ? 'active' : ''}`} onClick={() => setActiveTab('main')}>📦 卡价管理</button>
+        <button className={`filter-btn ${activeTab === '0754' ? 'active' : ''}`} onClick={() => setActiveTab('0754')}>0754 售出</button>
+      </div>
+
+      {/* Main Tab Content */}
+      {activeTab === 'main' && (
+      <>
+      {/* Stats */}
+      <div className="stats-bar">
+        <div className="stat-card blue">
+          <div className="stat-label">库存成本</div>
+          <div className="stat-value">{formatMoney(totalCost)}</div>
+          <div className="stat-sub">{unsoldCount} 种未售出</div>
+          <div style={{marginTop:10,paddingTop:10,borderTop:'1px solid rgba(255,255,255,0.06)'}}>
+            <div style={{fontSize:11,color:'#8b949e',marginBottom:2}}>{toBreakEven > 0 ? '距回本还差' : '已超额回本'}</div>
+            <div style={{fontSize:18,fontWeight:700,color:toBreakEven > 0 ? '#f0883e' : '#3fb950'}}>{toBreakEven > 0 ? formatMoney(toBreakEven) : formatMoney(-toBreakEven)}</div>
+            <div style={{fontSize:10,color:'#6e7681'}}>已收 {formatMoney(totalEarned)}</div>
+          </div>
+        </div>
+        <div className="stat-card green">
+          <div className="stat-label">已售总额</div>
+          <div className="stat-value green">{formatMoney(totalSoldValue)}</div>
+          <div className="stat-sub">{soldCount} 种已售出</div>
+          <div style={{marginTop:10,paddingTop:10,borderTop:'1px solid rgba(255,255,255,0.06)'}}>
+            <div style={{fontSize:11,color:'#8b949e',marginBottom:2}}>当前利润</div>
+            <div style={{fontSize:18,fontWeight:700,color:totalProfit >= 0 ? '#3fb950' : '#f85149'}}>{totalProfit >= 0 ? '+' : ''}{formatMoney(totalProfit)}</div>
+            <div style={{fontSize:10,color:'#6e7681'}}>利润率 {totalSoldValue > 0 ? ((totalProfit / totalSoldCost) * 100).toFixed(1) : 0}%</div>
+          </div>
+        </div>
+        <div className="stat-card primary">
+          <div className="stat-label">总卡牌数</div>
+          <div className="stat-value">{items.length}</div>
+          <div className="stat-sub">{totalCards} 张卡牌</div>
+        </div>
+        <div className="stat-card blue">
+          <div className="stat-label">已售成本</div>
+          <div className="stat-value">{formatMoney(totalSoldCost)}</div>
+          <div className="stat-sub">已售+待签收</div>
+        </div>
+        <div className="stat-card red">
+          <div className="stat-label">待签收金额</div>
+          <div className="stat-value" style={{color:'#f85149'}}>{formatMoney(totalPendingValue)}</div>
+          <div className="stat-sub">{pendingCount} 种待签收</div>
+        </div>
+      </div>
+
+      {/* Sticky Content Wrapper */}
+      <div className="table-sticky-wrapper">
+
+      {/* Toolbar */}
+      <div className="toolbar">
+        <div className="search-box">
+          <svg className="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8"/>
+            <path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input placeholder="搜索卡牌名称..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
+        </div>
+        <div className="filter-group">
+          <button className={`filter-btn ${filter === '全部' ? 'active' : ''}`} onClick={() => { setFilter('全部'); setPage(1); }}>全部</button>
+          <button className={`filter-btn ${filter === '未售出' ? 'active' : ''}`} onClick={() => { setFilter('未售出'); setPage(1); }}>未售出</button>
+          <button className={`filter-btn ${filter === '已售出' ? 'active-green' : ''}`} onClick={() => { setFilter('已售出'); setPage(1); }}>已售出</button>
+          <button className={`filter-btn ${filter === '待签收' ? 'active-orange' : ''}`} onClick={() => { setFilter('待签收'); setPage(1); }}>待签收</button>
+        </div>
+        <div className="bulk-actions">
+          <select value={sortField + '|' + sortDir} onChange={e => {
+            const [f, d] = e.target.value.split('|');
+            setSortField(f); setSortDir(d); setPage(1);
+          }} style={{
+            padding:'8px 12px', borderRadius:6, border:'1px solid var(--border)',
+            background: 'var(--surface-solid)', color: 'var(--text-2)',
+            fontSize:12, fontWeight:600, fontFamily: "'Plus Jakarta Sans', sans-serif",
+            cursor:'pointer', outline:'none'
+          }}>
+            <option value="id|desc">⇅ 默认（最新在前）</option>
+            <option value="id|asc">⇅ ID 升序</option>
+            <option value="name|asc">⇅ 名称 A→Z</option>
+            <option value="name|desc">⇅ 名称 Z→A</option>
+            <option value="unitPrice|desc">⇅ 单价 高→低</option>
+            <option value="unitPrice|asc">⇅ 单价 低→高</option>
+            <option value="qty|desc">⇅ 数量 多→少</option>
+            <option value="cost|desc">⇅ 成本 高→低</option>
+            <option value="cost|asc">⇅ 成本 低→高</option>
+            <option value="remaining|desc">⇅ 剩余 多→少</option>
+            <option value="remaining|asc">⇅ 剩余 少→多</option>
+            <option value="soldValue|desc">⇅ 已售额 高→低</option>
+            <option value="soldValue|asc">⇅ 已售额 低→高</option>
+            <option value="profit|desc">⇅ 利润 高→低</option>
+            <option value="profit|asc">⇅ 利润 低→高</option>
+          </select>
+          <button className="btn btn-secondary" onClick={handleBulkMarkSigned}>批量设为待签收</button>
+        </div>
+      </div>
+
+      {/* Add Form */}
+      {showAdd && <AddCardForm onAdd={handleAdd} onCancel={() => setShowAdd(false)} />}
+      {!showAdd && (
+        <div className="add-form-toggle" style={{display:'flex', gap:12, flexWrap:'wrap'}}>
+          <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ 添加新卡牌</button>
+          <button className="btn" style={{background:'rgba(34,197,94,0.15)',color:'#22c55e',border:'1px solid rgba(34,197,94,0.3)'}} onClick={() => setBatchImage(true)}>🖼️ 批量添加图片</button>
+        </div>
+      )}
+      {batchImage && <BatchImageModal items={items} onUpdate={setItems} onClose={() => setBatchImage(false)} showToast={showToast} />}
+
+      {/* Table */}
+      <div className="table-container">
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style={{width: 60, textAlign:'center'}} onClick={() => handleSort('id')} className={sortField === 'id' ? 'sorted' : ''}>ID <SortIcon field="id"/></th>
+                <th style={{width: 56, textAlign:'center'}}>图</th>
+                <th onClick={() => handleSort('name')} className={sortField === 'name' ? 'sorted' : ''}>卡牌名称 <SortIcon field="name"/></th>
+                <th onClick={() => handleSort('unitPrice')} className={sortField === 'unitPrice' ? 'sorted' : ''} style={{textAlign:'right'}}>单价 <SortIcon field="unitPrice"/></th>
+                <th onClick={() => handleSort('qty')} className={sortField === 'qty' ? 'sorted' : ''} style={{textAlign:'right'}}>数量 <SortIcon field="qty"/></th>
+                <th onClick={() => handleSort('remaining')} className={sortField === 'remaining' ? 'sorted' : ''} style={{textAlign:'right'}}>剩余 <SortIcon field="remaining"/></th>
+                <th onClick={() => handleSort('cost')} className={sortField === 'cost' ? 'sorted' : ''} style={{textAlign:'right'}}>成本 <SortIcon field="cost"/></th>
+                <th onClick={() => handleSort('soldValue')} className={sortField === 'soldValue' ? 'sorted' : ''} style={{textAlign:'right', fontSize: 11}}>已售 <SortIcon field="soldValue"/></th>
+                <th onClick={() => handleSort('profit')} className={sortField === 'profit' ? 'sorted' : ''} style={{textAlign:'right'}}>利润 <SortIcon field="profit"/></th>
+                <th onClick={() => handleSort('status')} className={sortField === 'status' ? 'sorted' : ''} style={{width:100}}>状态 <SortIcon field="status"/></th>
+                <th style={{width: 120}}>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginated.length === 0 ? (
+                <tr><td colSpan={11}><div className="empty-state"><div className="empty-icon">📭</div>没有找到匹配的卡牌</div></td></tr>
+              ) : paginated.map((item, idx) => (
+                <tr key={item.id} className={rowClass(item)}>
+                  <td style={{color: '#64748b', fontSize: 12, textAlign:'center'}}>{item.id}</td>
+                  <td>
+                    {item.imageUrl ? (
+                      <img
+                        src={item.imageUrl}
+                        alt={item.name}
+                        style={{width:40,height:40,objectFit:'contain',borderRadius:6,border:'1px solid var(--border)',background:'#1c2a45',cursor:'pointer',flexShrink:0}}
+                        onClick={() => setZoomedImage(item.imageUrl)}
+                        onError={e => { e.target.style.display='none'; }}
+                      />
+                    ) : (
+                      <div style={{width:40,height:40,borderRadius:6,border:'1px dashed var(--border)',background:'#1c2a45',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,cursor:'pointer',flexShrink:0}} title={`为「${item.name}」搜索图片`} onClick={e => { e.stopPropagation(); window.open(`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(item.name + ' 宝可梦卡牌')}`, '_blank'); }}>🔍</div>
+                    )}
+                  </td>
+                  <td className="card-name">{item.name}</td>
+                  <td className="price-cell" style={{textAlign:'right'}}>{item.unitPrice !== null ? '¥' + item.unitPrice.toLocaleString('zh-CN', {minimumFractionDigits:2}) : '—'}</td>
+                  <td className="price-cell" style={{textAlign:'right'}}>{item.qty ?? '—'}</td>
+                  <td className="price-cell" style={{textAlign:'right', color: '#64748b'}}>
+                    {(item.qty ?? 0) - (item.sells || []).reduce((s, v) => s + (v.qty || 0), 0)}
+                  </td>
+                  <td className="price-cell" style={{textAlign:'right'}}>{item.cost !== null ? formatMoney(item.cost) : '—'}</td>
+                  <td className="price-cell" style={{textAlign:'right', color: 'var(--green)', fontWeight:600}}>
+                    {(item.sells || []).reduce((s, v) => s + (v.qty || 0), 0) > 0
+                      ? (() => {
+                          const totalQty = (item.sells || []).reduce((s, v) => s + (v.qty || 0), 0);
+                          const totalVal = (item.sells || []).reduce((s, v) => s + (v.total || 0), 0);
+                          return `${totalQty}张 ¥${totalVal.toFixed(2)}`;
+                        })()
+                      : '—'}
+                  </td>
+                  <td className="price-cell" style={{textAlign:'right'}}>
+                    {item.profit !== null ? (
+                      <span className={item.profit > 0 ? 'profit-positive' : item.profit < 0 ? 'profit-negative' : 'profit-zero'}>
+                        {item.profit > 0 ? '+' : ''}{formatMoney(item.profit)}
+                      </span>
+                    ) : '—'}
+                  </td>
+                  <td><span className={statusBadgeClass(item)}>{statusBadgeText(item)}</span></td>
+                  <td>
+                    <div style={{display:'flex', gap:4}}>
+                      <button className="action-btn" onClick={() => setEditingItem(item)}>编辑</button>
+                      <button className="action-btn" style={{color:'#ef4444', borderColor:'#7f1d1d',background:'#2d1212'}} onClick={() => handleDelete(item.id)}>删除</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div style={{padding:'16px', display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'1px solid var(--border)'}}>
+              <div style={{fontSize:13, color:'var(--text-2)'}}>
+                显示 {(page-1)*PAGE_SIZE + 1}–{Math.min(page*PAGE_SIZE, filtered.length)}，共 {filtered.length} 条
+              </div>
+              <div style={{display:'flex', gap:4}}>
+                <button className="btn btn-secondary" disabled={page === 1} onClick={() => setPage(p => p-1)}>‹ 上一页</button>
+                {Array.from({length: Math.min(5, totalPages)}, (_, i) => {
+                  let p = i + 1;
+                  if (totalPages > 5) {
+                    if (page > 3) p = page - 2 + i;
+                    if (page > totalPages - 2) p = totalPages - 4 + i;
+                  }
+                  if (p < 1 || p > totalPages) return null;
+                  return <button key={p} className={`btn ${page === p ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setPage(p)} style={{minWidth:40}}>{p}</button>;
+                })}
+                <button className="btn btn-secondary" disabled={page === totalPages} onClick={() => setPage(p => p+1)}>下一页 ›</button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{textAlign:'center', fontSize:12, color:'var(--text-2)', marginTop:12}}>
+          <div className="color-legend" style={{justifyContent:'center'}}>
+            <div className="color-legend-item"><div className="color-dot gray"></div>未售出</div>
+            <div className="color-legend-item"><div className="color-dot green"></div>已售出</div>
+            <div className="color-legend-item"><div className="color-dot orange"></div>待签收</div>
+          </div>
+        </div>
+      </div>
+      </div>
+      </>
+      )}
+
+      {/* Modal */}
+      {editingItem && <EditModal item={editingItem} onSave={handleSave} onClose={() => setEditingItem(null)} onToast={setToast} />}
+
+      {/* Toast */}
+      {toast && <Toast message={toast} onDone={() => setToast(null)} />}
+
+      {/* 0754 售出 Tab */}
+      {activeTab === '0754' && <Tab0754 />}
+
+      {/* Image Zoom Modal */}
+      {zoomedImage && (
+        <div style={{
+          position:'fixed', inset:0, background:'rgba(0,0,0,0.85)',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          zIndex:9999, cursor:'zoom-out', padding:24
+        }} onClick={() => setZoomedImage(null)}>
+          <img
+            src={zoomedImage}
+            alt="放大图片"
+            style={{
+              maxWidth:'100%', maxHeight:'100%', objectFit:'contain',
+              borderRadius:12, boxShadow:'0 20px 60px rgba(0,0,0,0.5)',
+              cursor:'default'
+            }}
+            onClick={e => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setZoomedImage(null)}
+            style={{
+              position:'absolute', top:16, right:20,
+              background:'rgba(255,255,255,0.15)', border:'none',
+              color:'#fff', fontSize:20, width:40, height:40,
+              borderRadius:'50%', cursor:'pointer', lineHeight:1
+            }}
+          >✕</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
