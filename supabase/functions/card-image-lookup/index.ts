@@ -32,7 +32,7 @@ async function fetchText(url) {
     headers: { "User-Agent": USER_AGENT },
   });
   if (!response.ok) {
-    throw new Error(`请求失败 (${response.status})`);
+    throw new Error("请求失败 (" + response.status + ")");
   }
   return await response.text();
 }
@@ -49,7 +49,7 @@ async function urlExists(url) {
 }
 
 function rJinaUrl(url) {
-  return `${R_JINA_PREFIX}${url}`;
+  return R_JINA_PREFIX + url;
 }
 
 function parseCardCode(raw) {
@@ -64,14 +64,14 @@ function parseCardCode(raw) {
   const setCode = match[1];
   const cardNum = String(match[2]).padStart(3, "0");
   const denominator = match[3] || "";
-  const cardNumber = denominator ? `${cardNum}/${denominator}` : cardNum;
+  const cardNumber = denominator ? cardNum + "/" + denominator : cardNum;
   return {
     raw,
     setCode,
     cardNum,
     denominator,
     cardNumber,
-    canonical: `${setCode}-${cardNumber}`,
+    canonical: setCode + "-" + cardNumber,
   };
 }
 
