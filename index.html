@@ -763,21 +763,19 @@ async function fetchItemsFromSupabase(client, config) {
   };
 }
 async function saveItemsToSupabase(client, config, items) {
-  const payload = makeBackupSafeItems(items);
   const now = new Date().toISOString();
   const { error } = await client
     .from(config.table)
     .upsert(
       {
         id: config.rowId,
-        payload: payload.items,
+        payload: items,
         updated_at: now
       },
       { onConflict: 'id' }
     );
   if (error) throw error;
   return {
-    strippedImageCount: payload.strippedImageCount,
     updatedAt: now
   };
 }
@@ -1622,7 +1620,6 @@ function App() {
   const [lastCloudSyncAt, setLastCloudSyncAt] = useState(null);
   const [cloudBusy, setCloudBusy] = useState(false);
   const storageWarningShownRef = useRef(false);
-  const cloudWarningShownRef = useRef(false);
   const itemsRef = useRef(items);
   const remoteReadyRef = useRef(false);
   const skipNextRemoteSaveRef = useRef(false);
@@ -1671,10 +1668,6 @@ function App() {
           const saveResult = await saveItemsToSupabase(client, supabaseConfig, itemsRef.current);
           if (cancelled) return;
           setLastCloudSyncAt(saveResult.updatedAt);
-          if (saveResult.strippedImageCount > 0 && !cloudWarningShownRef.current) {
-            cloudWarningShownRef.current = true;
-            showToast(`云端已跳过 ${saveResult.strippedImageCount} 张内嵌图片`);
-          }
         }
 
         setCloudStatus('已连接');
@@ -1725,10 +1718,6 @@ function App() {
         const saveResult = await saveItemsToSupabase(supabaseClientRef.current, supabaseConfig, itemsRef.current);
         setLastCloudSyncAt(saveResult.updatedAt);
         setCloudStatus('已连接');
-        if (saveResult.strippedImageCount > 0 && !cloudWarningShownRef.current) {
-          cloudWarningShownRef.current = true;
-          showToast(`云端已跳过 ${saveResult.strippedImageCount} 张内嵌图片`);
-        }
       } catch (error) {
         setCloudStatus('同步失败');
         setCloudError(error?.message || '云端同步失败');
