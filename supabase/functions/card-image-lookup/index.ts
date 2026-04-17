@@ -75,6 +75,23 @@ function parseCardCode(raw) {
   };
 }
 
+function normalizeCollectorToken(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "")
+    .replace(/[–—_]/g, "-");
+}
+
+function getExpectedCollectorNumbers(code) {
+  const values = new Set();
+  values.add(normalizeCollectorToken(code.cardNumber));
+  if (!code.denominator) {
+    values.add(normalizeCollectorToken(code.cardNum + "/" + code.setCode));
+  }
+  return values;
+}
+
 async function loadSetCodeMap() {
   const markdown = await fetchText(rJinaUrl(TCGCOLLECTOR_SETS_URL));
   const pattern = /\[([^\[\]\n]+?)\]\(https:\/\/www\.tcgcollector\.com\/sets\/\d+\/[^\)]+\)([A-Za-z0-9.-]+)/g;
@@ -93,17 +110,18 @@ async function loadSetCodeMap() {
   return mapping;
 }
 
-async function searchTcgCollector(code, setName) {
-  const query = encodeURIComponent(code.cardNumber);
+async function searchTcgCollector(query, code, setName) {
   const url = TCGCOLLECTOR_SEARCH_URL.replace("{query}", query);
   const markdown = await fetchText(rJinaUrl(url));
   const entryPattern =
-    /\[\!\[Image \d+: ([^\]]+)\]\((https:\/\/static\.tcgcollector\.com\/content\/images\/[^\)]+)\)\s+!\[Image \d+: ([^\]]+)\]\([^\)]*\)\s+(\d+\/\d+).*?\]\((https:\/\/www\.tcgcollector\.com\/cards\/\d+\/[^ \)]+)/gs;
+    /\[\!\[Image \d+: ([^\]]+)\]\((https:\/\/static\.tcgcollector\.com\/content\/images\/[^\)]+)\)\s+!\[Image \d+: ([^\]]+)\]\([^\)]*\)\s+([A-Za-z0-9.-]+(?:\/[A-Za-z0-9.-]+)+).*?\]\((https:\/\/www\.tcgcollector\.com\/cards\/\d+\/[^ \)]+)/gs;
+  const expectedNumbers = getExpectedCollectorNumbers(code);
 
   const matches = [];
   let match = null;
   while ((match = entryPattern.exec(markdown)) !== null) {
-    if ((match[4] || "").trim() !== code.cardNumber) continue;
+    const printedNumber = (match[4] || "").trim();
+    if (!expectedNumbers.has(normalizeCollectorToken(printedNumber))) continue;
     matches.push({
       code: code.canonical,
       source: "tcgcollector",
@@ -111,11 +129,12 @@ async function searchTcgCollector(code, setName) {
       imageUrl: (match[2] || "").trim(),
       pageUrl: (match[5] || "").trim(),
       setName: (match[3] || "").trim(),
+      printedNumber,
     });
   }
 
   if (matches.length === 0) {
-    throw new Error(`没有在 TCG Collector 中找到 ${code.cardNumber} 的结果。`);
+    throw new Error("没有在 TCG Collector 中找到 " + code.canonical + " 的结果。");
   }
 
   if (setName) {
@@ -130,9 +149,37 @@ async function searchTcgCollector(code, setName) {
 
   const available = matches
     .slice(0, 5)
-    .map((item) => `${item.setName}: ${item.title}`)
+    .map((item) => item.setName + " " + item.printedNumber + ": " + item.title)
     .join(" / ");
-  throw new Error(`找到了多个同编号结果，但没法唯一匹配 ${code.setCode}。候选：${available}`);
+  throw new Error("找到了多个同编号结果，但没法唯一匹配 " + code.setCode + "。候选：" + available);
+}
+
+async function searchTcgCollectorWithFallback(code, setName) {
+  const queries = [];
+  if (code.denominator) {
+    queries.push(code.cardNumber);
+  } else {
+    queries.push(code.cardNum + " " + code.setCode);
+    queries.push(code.setCode + " " + code.cardNum);
+    queries.push(code.cardNum + "/" + code.setCode);
+  }
+
+  const seen = new Set();
+  let lastError = null;
+
+  for (const rawQuery of queries) {
+    const query = String(rawQuery || "").trim();
+    if (!query || seen.has(query)) continue;
+    seen.add(query);
+    try {
+      return await searchTcgCollector(encodeURIComponent(query), code, setName);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastError) throw lastError;
+  throw new Error("没有在 TCG Collector 中找到 " + code.canonical + " 的结果。");
 }
 
 async function lookupCardImage(rawCode) {
@@ -152,13 +199,9 @@ async function lookupCardImage(rawCode) {
     };
   }
 
-  if (!code.denominator) {
-    throw new Error(`${code.canonical} 在 tcg.mik.moe 上不存在，且编号里没有总卡数，无法继续精确匹配。`);
-  }
-
   const setNameMap = await loadSetCodeMap();
   const setName = setNameMap[code.setCode] || "";
-  return await searchTcgCollector(code, setName);
+  return await searchTcgCollectorWithFallback(code, setName);
 }
 
 Deno.serve(async (request) => {
