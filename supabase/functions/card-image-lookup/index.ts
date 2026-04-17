@@ -13,27 +13,9 @@ const TCG_MIK_URL = "https://tcg.mik.moe/static/img/{set_code}/{card_num}.png";
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
 
-type CardCode = {
-  raw: string;
-  setCode: string;
-  cardNum: string;
-  denominator: string;
-  cardNumber: string;
-  canonical: string;
-};
-
-type LookupResult = {
-  code: string;
-  source: string;
-  title: string;
-  imageUrl: string;
-  pageUrl: string;
-  setName: string;
-};
-
-function jsonResponse(body: unknown, status = 200) {
+function jsonResponse(body, status) {
   return new Response(JSON.stringify(body), {
-    status,
+    status: status || 200,
     headers: {
       ...corsHeaders,
       "Content-Type": "application/json; charset=utf-8",
@@ -41,11 +23,11 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
-function errorResponse(message: string, status = 400) {
-  return jsonResponse({ error: message }, status);
+function errorResponse(message, status) {
+  return jsonResponse({ error: message }, status || 400);
 }
 
-async function fetchText(url: string) {
+async function fetchText(url) {
   const response = await fetch(url, {
     headers: { "User-Agent": USER_AGENT },
   });
@@ -55,7 +37,7 @@ async function fetchText(url: string) {
   return await response.text();
 }
 
-async function urlExists(url: string) {
+async function urlExists(url) {
   try {
     const response = await fetch(url, {
       headers: { "User-Agent": USER_AGENT },
@@ -66,22 +48,22 @@ async function urlExists(url: string) {
   }
 }
 
-function rJinaUrl(url: string) {
+function rJinaUrl(url) {
   return `${R_JINA_PREFIX}${url}`;
 }
 
-function parseCardCode(raw: string): CardCode {
+function parseCardCode(raw) {
   const cleaned = String(raw || "").trim().replace(/\s+/g, "").replace(/[–—_]/g, "-");
-  let match = cleaned.match(/^(?<set>.+)-(?<num>\d{1,3})(?:\/(?<den>[A-Za-z0-9.-]+))?$/);
+  let match = cleaned.match(/^(.+)-(\d{1,3})(?:\/([A-Za-z0-9.-]+))?$/);
   if (!match) {
-    match = cleaned.match(/^(?<set>[A-Za-z0-9.-]+?)(?<num>\d{2,3})(?:\/(?<den>[A-Za-z0-9.-]+))?$/);
+    match = cleaned.match(/^([A-Za-z0-9.-]+?)(\d{2,3})(?:\/([A-Za-z0-9.-]+))?$/);
   }
-  if (!match?.groups) {
+  if (!match) {
     throw new Error("编号格式无法识别，请使用类似 CSM2bC-034 或 M1L-089/063 的格式。");
   }
-  const setCode = match.groups.set;
-  const cardNum = match.groups.num.padStart(3, "0");
-  const denominator = match.groups.den || "";
+  const setCode = match[1];
+  const cardNum = String(match[2]).padStart(3, "0");
+  const denominator = match[3] || "";
   const cardNumber = denominator ? `${cardNum}/${denominator}` : cardNum;
   return {
     raw,
@@ -96,11 +78,11 @@ function parseCardCode(raw: string): CardCode {
 async function loadSetCodeMap() {
   const markdown = await fetchText(rJinaUrl(TCGCOLLECTOR_SETS_URL));
   const pattern = /\[([^\[\]\n]+?)\]\(https:\/\/www\.tcgcollector\.com\/sets\/\d+\/[^\)]+\)([A-Za-z0-9.-]+)/g;
-  const mapping: Record<string, string> = {};
-  let match: RegExpExecArray | null;
+  const mapping = {};
+  let match = null;
   while ((match = pattern.exec(markdown)) !== null) {
-    const name = match[1].trim();
-    const code = match[2].trim();
+    const name = (match[1] || "").trim();
+    const code = (match[2] || "").trim();
     if (code && !mapping[code]) {
       mapping[code] = name;
     }
@@ -111,25 +93,24 @@ async function loadSetCodeMap() {
   return mapping;
 }
 
-async function searchTcgCollector(code: CardCode, setName: string) {
+async function searchTcgCollector(code, setName) {
   const query = encodeURIComponent(code.cardNumber);
   const url = TCGCOLLECTOR_SEARCH_URL.replace("{query}", query);
   const markdown = await fetchText(rJinaUrl(url));
-
   const entryPattern =
     /\[\!\[Image \d+: ([^\]]+)\]\((https:\/\/static\.tcgcollector\.com\/content\/images\/[^\)]+)\)\s+!\[Image \d+: ([^\]]+)\]\([^\)]*\)\s+(\d+\/\d+).*?\]\((https:\/\/www\.tcgcollector\.com\/cards\/\d+\/[^ \)]+)/gs;
 
-  const matches: LookupResult[] = [];
-  let match: RegExpExecArray | null;
+  const matches = [];
+  let match = null;
   while ((match = entryPattern.exec(markdown)) !== null) {
-    if (match[4].trim() !== code.cardNumber) continue;
+    if ((match[4] || "").trim() !== code.cardNumber) continue;
     matches.push({
       code: code.canonical,
       source: "tcgcollector",
-      title: match[1].trim(),
-      imageUrl: match[2].trim(),
-      pageUrl: match[5].trim(),
-      setName: match[3].trim(),
+      title: (match[1] || "").trim(),
+      imageUrl: (match[2] || "").trim(),
+      pageUrl: (match[5] || "").trim(),
+      setName: (match[3] || "").trim(),
     });
   }
 
@@ -138,19 +119,23 @@ async function searchTcgCollector(code: CardCode, setName: string) {
   }
 
   if (setName) {
-    const exact = matches.find((item) => item.setName === setName);
-    if (exact) return exact;
+    for (const item of matches) {
+      if (item.setName === setName) return item;
+    }
   }
 
   if (matches.length === 1) {
     return matches[0];
   }
 
-  const available = matches.slice(0, 5).map((item) => `${item.setName}: ${item.title}`).join(" / ");
+  const available = matches
+    .slice(0, 5)
+    .map((item) => `${item.setName}: ${item.title}`)
+    .join(" / ");
   throw new Error(`找到了多个同编号结果，但没法唯一匹配 ${code.setCode}。候选：${available}`);
 }
 
-async function lookupCardImage(rawCode: string) {
+async function lookupCardImage(rawCode) {
   const code = parseCardCode(rawCode);
   const tcgMikUrl = TCG_MIK_URL
     .replace("{set_code}", code.setCode)
@@ -187,14 +172,14 @@ Deno.serve(async (request) => {
 
   try {
     const body = await request.json();
-    const code = String(body?.code || "").trim();
+    const code = String((body && body.code) || "").trim();
     if (!code) {
       return errorResponse("缺少卡牌编号 code", 400);
     }
     const result = await lookupCardImage(code);
     return jsonResponse(result, 200);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "查图失败";
+    const message = error && error.message ? error.message : "查图失败";
     return errorResponse(message, 500);
   }
 });
