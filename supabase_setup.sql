@@ -47,3 +47,30 @@ with check (true);
 insert into public.card_app_state (id, payload)
 values ('main', '[]'::jsonb)
 on conflict (id) do nothing;
+
+insert into storage.buckets (id, name, public)
+values ('card-images', 'card-images', true)
+on conflict (id) do update
+set public = true;
+
+drop policy if exists "Allow public read card images" on storage.objects;
+create policy "Allow public read card images"
+on storage.objects
+for select
+to public
+using (bucket_id = 'card-images');
+
+drop policy if exists "Allow public upload card images" on storage.objects;
+create policy "Allow public upload card images"
+on storage.objects
+for insert
+to public
+with check (bucket_id = 'card-images');
+
+drop policy if exists "Allow public update card images" on storage.objects;
+create policy "Allow public update card images"
+on storage.objects
+for update
+to public
+using (bucket_id = 'card-images')
+with check (bucket_id = 'card-images');

@@ -546,7 +546,8 @@ const SUPABASE_DEFAULT_CONFIG = {
   url: 'https://hnnzyrslsmpankpkhjho.supabase.co',
   anonKey: 'sb_publishable_-rtge5LdKWSnkwKUFWc-aQ_gu3Q8vj0',
   table: 'card_app_state',
-  rowId: 'main'
+  rowId: 'main',
+  bucket: 'card-images'
 };
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -713,7 +714,8 @@ function normalizeSupabaseConfig(raw) {
     url: String(config.url || '').trim(),
     anonKey: String(config.anonKey || '').trim(),
     table: String(config.table || SUPABASE_DEFAULT_CONFIG.table).trim() || SUPABASE_DEFAULT_CONFIG.table,
-    rowId: String(config.rowId || SUPABASE_DEFAULT_CONFIG.rowId).trim() || SUPABASE_DEFAULT_CONFIG.rowId
+    rowId: String(config.rowId || SUPABASE_DEFAULT_CONFIG.rowId).trim() || SUPABASE_DEFAULT_CONFIG.rowId,
+    bucket: String(config.bucket || SUPABASE_DEFAULT_CONFIG.bucket).trim() || SUPABASE_DEFAULT_CONFIG.bucket
   };
 }
 function readSupabaseConfig() {
@@ -762,21 +764,89 @@ async function fetchItemsFromSupabase(client, config) {
     updatedAt: data.updated_at || null
   };
 }
+function getFileExtensionFromMimeType(mimeType) {
+  if (!mimeType) return 'png';
+  if (mimeType.includes('png')) return 'png';
+  if (mimeType.includes('jpeg') || mimeType.includes('jpg')) return 'jpg';
+  if (mimeType.includes('webp')) return 'webp';
+  if (mimeType.includes('gif')) return 'gif';
+  return 'png';
+}
+function slugifyPathPart(value, fallback) {
+  const normalized = String(value || fallback || '')
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return normalized || fallback;
+}
+async function dataUrlToBlob(dataUrl) {
+  const response = await fetch(dataUrl);
+  return response.blob();
+}
+async function uploadDataUrlImageToSupabaseStorage(client, config, item, index) {
+  const blob = await dataUrlToBlob(item.imageUrl);
+  const mimeType = blob.type || 'image/png';
+  const extension = getFileExtensionFromMimeType(mimeType);
+  const itemKey = slugifyPathPart(item.cardCode || item.id || item.name, `item-${index + 1}`);
+  const filePath = `${config.rowId}/${itemKey}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
+
+  const { error } = await client.storage
+    .from(config.bucket)
+    .upload(filePath, blob, {
+      contentType: mimeType,
+      cacheControl: '31536000',
+      upsert: false
+    });
+
+  if (error) throw error;
+
+  const { data } = client.storage.from(config.bucket).getPublicUrl(filePath);
+  if (!data?.publicUrl) throw new Error('图片上传成功，但未拿到公开地址');
+  return data.publicUrl;
+}
+async function uploadEmbeddedImagesToSupabaseStorage(client, config, items) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return { items: [], uploadedCount: 0 };
+  }
+
+  const tasks = items.map(async (item, index) => {
+    if (!item || typeof item !== 'object' || !isDataUrlImage(item.imageUrl)) {
+      return { item, uploaded: false };
+    }
+    const publicUrl = await uploadDataUrlImageToSupabaseStorage(client, config, item, index);
+    return {
+      item: {
+        ...item,
+        imageUrl: publicUrl
+      },
+      uploaded: true
+    };
+  });
+
+  const results = await Promise.all(tasks);
+  return {
+    items: results.map(result => result.item),
+    uploadedCount: results.filter(result => result.uploaded).length
+  };
+}
 async function saveItemsToSupabase(client, config, items) {
+  const uploaded = await uploadEmbeddedImagesToSupabaseStorage(client, config, items);
   const now = new Date().toISOString();
   const { error } = await client
     .from(config.table)
     .upsert(
       {
         id: config.rowId,
-        payload: items,
+        payload: uploaded.items,
         updated_at: now
       },
       { onConflict: 'id' }
     );
   if (error) throw error;
   return {
-    updatedAt: now
+    updatedAt: now,
+    items: uploaded.items,
+    uploadedCount: uploaded.uploadedCount
   };
 }
 function formatDateTime(value) {
@@ -867,9 +937,9 @@ function CloudConfigModal({
 
           <div className="modal-section-title">使用说明</div>
           <div style={{fontSize:13, color:'var(--text-2)', lineHeight:1.7}}>
-            <div>1. 在 Supabase 新建项目后，先运行仓库里的 <code>supabase_setup.sql</code>。</div>
+            <div>1. 在 Supabase 新建项目后，先运行仓库里的 <code>supabase_setup.sql</code>，它会同时创建数据表和图片存储桶。</div>
             <div>2. 到 Project Settings → API，复制 Project URL 和 anon public key。</div>
-            <div>3. 保存后页面会优先从云端读取数据，之后所有修改都会自动同步。</div>
+            <div>3. 保存后页面会优先从云端读取数据，上传的本地图片会自动转存到 Supabase Storage。</div>
           </div>
 
           <div style={{marginTop:16, padding:'12px 14px', borderRadius:10, background:'rgba(240,136,62,0.1)', border:'1px solid rgba(240,136,62,0.25)', color:'#f6b26b', fontSize:12, lineHeight:1.6}}>
@@ -1667,6 +1737,11 @@ function App() {
         } else {
           const saveResult = await saveItemsToSupabase(client, supabaseConfig, itemsRef.current);
           if (cancelled) return;
+          if (saveResult.uploadedCount > 0) {
+            skipNextRemoteSaveRef.current = true;
+            setItems(saveResult.items);
+            showToast(`已上传 ${saveResult.uploadedCount} 张图片到云端`);
+          }
           setLastCloudSyncAt(saveResult.updatedAt);
         }
 
@@ -1716,6 +1791,11 @@ function App() {
       setCloudError('');
       try {
         const saveResult = await saveItemsToSupabase(supabaseClientRef.current, supabaseConfig, itemsRef.current);
+        if (saveResult.uploadedCount > 0) {
+          skipNextRemoteSaveRef.current = true;
+          setItems(saveResult.items);
+          showToast(`已上传 ${saveResult.uploadedCount} 张图片到云端`);
+        }
         setLastCloudSyncAt(saveResult.updatedAt);
         setCloudStatus('已连接');
       } catch (error) {
