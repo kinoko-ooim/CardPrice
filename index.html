@@ -1714,6 +1714,22 @@ function BatchImageModal({ items, onUpdate, onClose, showToast }) {
     return 'https://tcg.mik.moe/static/img/' + series + '/' + num + '.png';
   }
 
+  async function lookupBatchImageUrl(code) {
+    try {
+      const result = await lookupCardImageViaEdgeFunction(code);
+      return result.imageUrl || null;
+    } catch (_error) {
+      const fallbackUrl = buildImageUrl(code);
+      if (!fallbackUrl) return null;
+      try {
+        await preloadImageUrl(fallbackUrl);
+        return fallbackUrl;
+      } catch (_fallbackError) {
+        return null;
+      }
+    }
+  }
+
   async function handleApply() {
     const lines = text.trim().split('\n').filter(l => l.trim());
     if (lines.length === 0) {
@@ -1744,20 +1760,8 @@ function BatchImageModal({ items, onUpdate, onClose, showToast }) {
         continue;
       }
 
-      // 下载图片
-      const url = buildImageUrl(code);
-      if (!url) {
-        skipped++;
-        continue;
-      }
-
       if (!cardMap[code]) {
-        try {
-          await preloadImageUrl(url);
-          cardMap[code] = url;
-        } catch {
-          cardMap[code] = null;
-        }
+        cardMap[code] = await lookupBatchImageUrl(code);
       }
 
       if (cardMap[code]) {
