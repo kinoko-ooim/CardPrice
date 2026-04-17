@@ -806,27 +806,42 @@ async function uploadDataUrlImageToSupabaseStorage(client, config, item, index) 
 }
 async function uploadEmbeddedImagesToSupabaseStorage(client, config, items) {
   if (!Array.isArray(items) || items.length === 0) {
-    return { items: [], uploadedCount: 0 };
+    return { items: [], uploadedCount: 0, failedCount: 0, firstError: '' };
   }
 
   const tasks = items.map(async (item, index) => {
     if (!item || typeof item !== 'object' || !isDataUrlImage(item.imageUrl)) {
-      return { item, uploaded: false };
+      return { item, uploaded: false, failed: false, error: '' };
     }
-    const publicUrl = await uploadDataUrlImageToSupabaseStorage(client, config, item, index);
-    return {
-      item: {
-        ...item,
-        imageUrl: publicUrl
-      },
-      uploaded: true
-    };
+    try {
+      const publicUrl = await uploadDataUrlImageToSupabaseStorage(client, config, item, index);
+      return {
+        item: {
+          ...item,
+          imageUrl: publicUrl
+        },
+        uploaded: true,
+        failed: false,
+        error: ''
+      };
+    } catch (error) {
+      console.warn('图片上传到 Supabase Storage 失败，改为保留原图数据继续同步', error);
+      return {
+        item,
+        uploaded: false,
+        failed: true,
+        error: error?.message || '图片上传失败'
+      };
+    }
   });
 
   const results = await Promise.all(tasks);
+  const failedResults = results.filter(result => result.failed);
   return {
     items: results.map(result => result.item),
-    uploadedCount: results.filter(result => result.uploaded).length
+    uploadedCount: results.filter(result => result.uploaded).length,
+    failedCount: failedResults.length,
+    firstError: failedResults[0]?.error || ''
   };
 }
 async function saveItemsToSupabase(client, config, items) {
@@ -846,7 +861,9 @@ async function saveItemsToSupabase(client, config, items) {
   return {
     updatedAt: now,
     items: uploaded.items,
-    uploadedCount: uploaded.uploadedCount
+    uploadedCount: uploaded.uploadedCount,
+    failedCount: uploaded.failedCount,
+    firstError: uploaded.firstError
   };
 }
 function formatDateTime(value) {
@@ -1742,6 +1759,9 @@ function App() {
             setItems(saveResult.items);
             showToast(`已上传 ${saveResult.uploadedCount} 张图片到云端`);
           }
+          if (saveResult.failedCount > 0) {
+            showToast(`有 ${saveResult.failedCount} 张图片未上传到存储，已先保存在数据库`);
+          }
           setLastCloudSyncAt(saveResult.updatedAt);
         }
 
@@ -1795,6 +1815,9 @@ function App() {
           skipNextRemoteSaveRef.current = true;
           setItems(saveResult.items);
           showToast(`已上传 ${saveResult.uploadedCount} 张图片到云端`);
+        }
+        if (saveResult.failedCount > 0) {
+          showToast(`有 ${saveResult.failedCount} 张图片未上传到存储，已先保存在数据库`);
         }
         setLastCloudSyncAt(saveResult.updatedAt);
         setCloudStatus('已连接');
