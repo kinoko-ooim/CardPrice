@@ -94,16 +94,42 @@ function getExpectedCollectorNumbers(code) {
 
 async function loadSetCodeMap() {
   const markdown = await fetchText(rJinaUrl(TCGCOLLECTOR_SETS_URL));
-  const pattern = /\[([^\[\]\n]+?)\]\(https:\/\/www\.tcgcollector\.com\/sets\/\d+\/[^\)]+\)([A-Za-z0-9.-]+)/g;
   const mapping = {};
-  let match = null;
-  while ((match = pattern.exec(markdown)) !== null) {
-    const name = (match[1] || "").trim();
-    const code = (match[2] || "").trim();
-    if (code && !mapping[code]) {
+  const lines = markdown.split("\n");
+
+  for (const rawLine of lines) {
+    const line = String(rawLine || "").trim();
+    const marker = "](https://www.tcgcollector.com/sets/";
+    const linkIndex = line.indexOf(marker);
+    if (linkIndex < 0) {
+      continue;
+    }
+
+    const idStart = linkIndex + marker.length;
+    const firstIdChar = line.charAt(idStart);
+    if (firstIdChar < "0" || firstIdChar > "9") {
+      continue;
+    }
+
+    const nameStart = line.lastIndexOf("[", linkIndex);
+    if (nameStart < 0) {
+      continue;
+    }
+
+    const closeIndex = line.indexOf(")", idStart);
+    if (closeIndex < 0) {
+      continue;
+    }
+
+    const name = line.slice(nameStart + 1, linkIndex).trim();
+    const suffix = line.slice(closeIndex + 1).trim();
+    const code = suffix.split(/\s+/)[0] || "";
+
+    if (name && code && !mapping[code]) {
       mapping[code] = name;
     }
   }
+
   if (Object.keys(mapping).length === 0) {
     throw new Error("未能从 TCG Collector 解析出日版卡包列表。");
   }
@@ -113,24 +139,86 @@ async function loadSetCodeMap() {
 async function searchTcgCollector(query, code, setName) {
   const url = TCGCOLLECTOR_SEARCH_URL.replace("{query}", query);
   const markdown = await fetchText(rJinaUrl(url));
-  const entryPattern =
-    /\[\!\[Image \d+: ([^\]]+)\]\((https:\/\/static\.tcgcollector\.com\/content\/images\/[^\)]+)\)\s+!\[Image \d+: ([^\]]+)\]\([^\)]*\)\s+([A-Za-z0-9.-]+(?:\/[A-Za-z0-9.-]+)+).*?\]\((https:\/\/www\.tcgcollector\.com\/cards\/\d+\/[^ \)]+)/gs;
   const expectedNumbers = getExpectedCollectorNumbers(code);
-
   const matches = [];
-  let match = null;
-  while ((match = entryPattern.exec(markdown)) !== null) {
-    const printedNumber = (match[4] || "").trim();
+
+  for (const rawLine of markdown.split("\n")) {
+    const line = String(rawLine || "").trim();
+    if (!line.includes("https://www.tcgcollector.com/cards/")) {
+      continue;
+    }
+    if (!line.startsWith("[![Image ")) {
+      continue;
+    }
+
+    const firstAltPrefix = "[![Image ";
+    const firstAltSep = ": ";
+    const firstAltStart = line.indexOf(firstAltPrefix);
+    const firstAltTextStart = line.indexOf(firstAltSep, firstAltStart);
+    const firstAltTextEnd = line.indexOf("](", firstAltTextStart);
+    if (firstAltTextStart < 0 || firstAltTextEnd < 0) {
+      continue;
+    }
+    const title = line.slice(firstAltTextStart + firstAltSep.length, firstAltTextEnd).trim();
+
+    const firstUrlStart = firstAltTextEnd + 2;
+    const firstUrlEnd = line.indexOf(")", firstUrlStart);
+    if (firstUrlEnd < 0) {
+      continue;
+    }
+    const imageUrl = line.slice(firstUrlStart, firstUrlEnd).trim();
+
+    const secondAltMarker = " ![Image ";
+    const secondAltStart = line.indexOf(secondAltMarker, firstUrlEnd);
+    if (secondAltStart < 0) {
+      continue;
+    }
+    const secondAltTextStart = line.indexOf(firstAltSep, secondAltStart);
+    const secondAltTextEnd = line.indexOf("](", secondAltTextStart);
+    if (secondAltTextStart < 0 || secondAltTextEnd < 0) {
+      continue;
+    }
+    const foundSetName = line.slice(secondAltTextStart + firstAltSep.length, secondAltTextEnd).trim();
+
+    const secondUrlStart = secondAltTextEnd + 2;
+    const secondUrlEnd = line.indexOf(")", secondUrlStart);
+    if (secondUrlEnd < 0) {
+      continue;
+    }
+
+    const thirdAltStart = line.indexOf(" ![Image ", secondUrlEnd);
+    if (thirdAltStart < 0) {
+      continue;
+    }
+    const printedNumber = line.slice(secondUrlEnd + 1, thirdAltStart).trim();
     if (!expectedNumbers.has(normalizeCollectorToken(printedNumber))) {
       continue;
     }
+
+    const cardLinkMarker = "](https://www.tcgcollector.com/cards/";
+    const cardLinkStart = line.indexOf(cardLinkMarker, thirdAltStart);
+    if (cardLinkStart < 0) {
+      continue;
+    }
+    const pageUrlStart = cardLinkStart + 2;
+    const pageUrlEnd = line.indexOf(" ", pageUrlStart);
+    const pageUrlClose = line.indexOf(")", pageUrlStart);
+    let pageUrlStop = pageUrlClose;
+    if (pageUrlEnd >= 0 && pageUrlEnd < pageUrlClose) {
+      pageUrlStop = pageUrlEnd;
+    }
+    if (pageUrlStop < 0) {
+      continue;
+    }
+    const pageUrl = line.slice(pageUrlStart, pageUrlStop).trim();
+
     matches.push({
       code: code.canonical,
       source: "tcgcollector",
-      title: (match[1] || "").trim(),
-      imageUrl: (match[2] || "").trim(),
-      pageUrl: (match[5] || "").trim(),
-      setName: (match[3] || "").trim(),
+      title: title,
+      imageUrl: imageUrl,
+      pageUrl: pageUrl,
+      setName: foundSetName,
       printedNumber: printedNumber,
     });
   }
