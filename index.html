@@ -508,6 +508,64 @@
     }
     @keyframes toastIn { from { transform: translateY(20px) scale(0.9); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
 
+    .auth-shell {
+      min-height: calc(100vh - 64px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+    }
+    .auth-card {
+      width: min(460px, 100%);
+      background: rgba(22, 27, 35, 0.82);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: var(--shadow-lg);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+    }
+    .auth-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(88,166,255,0.12);
+      border: 1px solid rgba(88,166,255,0.24);
+      color: var(--primary-light);
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+    .auth-title {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      margin-bottom: 10px;
+    }
+    .auth-subtitle {
+      color: var(--text-2);
+      line-height: 1.7;
+      margin-bottom: 22px;
+    }
+    .auth-error {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(248,81,73,0.12);
+      border: 1px solid rgba(248,81,73,0.28);
+      color: var(--red);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .auth-hint {
+      margin-top: 16px;
+      color: var(--text-3);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
     /* Summary row */
     .summary-row td { background: rgba(33,38,45,0.8) !important; font-weight: 700; color: var(--text-2); font-size: 12px; }
 
@@ -542,6 +600,8 @@ const INITIAL_DATA = [{"id": 1, "name": "胡地", "unitPrice": 37, "qty": 1, "co
 const STORAGE_KEY = 'kajia_card_data';
 const SUPABASE_CONFIG_KEY = 'kajia_supabase_config';
 const DATA_URL_PREFIX = 'data:';
+const ACCESS_SESSION_KEY = 'kajia_access_granted';
+const ACCESS_PASSWORD_HASH = '1549c7def3809f8916e748ac0b005fb002f912cd03a60bbd7919e40de0576c5f';
 const SUPABASE_DEFAULT_CONFIG = {
   url: 'https://hnnzyrslsmpankpkhjho.supabase.co',
   anonKey: 'sb_publishable_-rtge5LdKWSnkwKUFWc-aQ_gu3Q8vj0',
@@ -549,6 +609,13 @@ const SUPABASE_DEFAULT_CONFIG = {
   rowId: 'main',
   bucket: 'card-images'
 };
+async function sha256Hex(value) {
+  const input = new TextEncoder().encode(String(value || ''));
+  const digest = await crypto.subtle.digest('SHA-256', input);
+  return Array.from(new Uint8Array(digest)).map(function(byte) {
+    return byte.toString(16).padStart(2, '0');
+  }).join('');
+}
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 function formatMoney(val) {
@@ -916,6 +983,62 @@ function Toast({ message, onDone }) {
     return () => clearTimeout(t);
   }, [onDone]);
   return <div className="toast">{message}</div>;
+}
+
+function PasswordGate({ onUnlock }) {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [checking, setChecking] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setChecking(true);
+    setError('');
+    try {
+      const digest = await sha256Hex(password);
+      if (digest !== ACCESS_PASSWORD_HASH) {
+        throw new Error('密码不正确');
+      }
+      sessionStorage.setItem(ACCESS_SESSION_KEY, '1');
+      onUnlock();
+    } catch (err) {
+      setError(err?.message || '验证失败');
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  return (
+    <div className="auth-shell">
+      <div className="auth-card">
+        <div className="auth-badge">🔒 后台受保护</div>
+        <div className="auth-title">输入密码后继续</div>
+        <div className="auth-subtitle">
+          这个后台现在需要先输入访问密码，验证通过后才会加载卡价管理和 0754 售出数据。
+        </div>
+        <form onSubmit={handleSubmit}>
+          <input
+            className="form-input"
+            type="password"
+            autoFocus
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            placeholder="请输入访问密码"
+            style={{fontSize: 16}}
+          />
+          <div style={{display:'flex', gap:10, marginTop:14}}>
+            <button className="btn btn-primary" type="submit" disabled={!password || checking}>
+              {checking ? '验证中...' : '进入后台'}
+            </button>
+          </div>
+        </form>
+        {error && <div className="auth-error">{error}</div>}
+        <div className="auth-hint">
+          当前版本是前端口令保护，适合拦住直接打开页面的访问；如果后面你要更严格的权限控制，我可以继续帮你接真正的账号登录。
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function CloudConfigModal({
@@ -1648,7 +1771,7 @@ function BatchImageModal({ items, onUpdate, onClose, showToast }) {
 }
 
 // Main App
-function App() {
+function App({ onLock }) {
   const [zoomedImage, setZoomedImage] = useState(null);
   const [activeTab, setActiveTab] = useState('main');
   const [supabaseConfig, setSupabaseConfig] = useState(() => readSupabaseConfig());
@@ -2089,6 +2212,7 @@ function App() {
               e.target.value = '';
             }} />
             <button className="btn btn-secondary" onClick={exportCSV}>📥 导出 CSV</button>
+            <button className="btn btn-secondary" onClick={onLock}>🔒 退出</button>
           </div>
         </div>
       </header>
@@ -2361,7 +2485,30 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+function ProtectedApp() {
+  const [isUnlocked, setIsUnlocked] = useState(() => {
+    try {
+      return sessionStorage.getItem(ACCESS_SESSION_KEY) === '1';
+    } catch (error) {
+      return false;
+    }
+  });
+
+  function handleUnlock() {
+    setIsUnlocked(true);
+  }
+
+  function handleLock() {
+    try {
+      sessionStorage.removeItem(ACCESS_SESSION_KEY);
+    } catch (error) {}
+    setIsUnlocked(false);
+  }
+
+  return isUnlocked ? <App onLock={handleLock} /> : <PasswordGate onUnlock={handleUnlock} />;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<ProtectedApp />);
 </script>
 </body>
 </html>
