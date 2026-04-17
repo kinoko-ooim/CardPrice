@@ -8,6 +8,7 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
@@ -539,7 +540,14 @@ const { useState, useEffect, useMemo, useCallback, useRef } = React;
 const INITIAL_DATA = [{"id": 1, "name": "胡地", "unitPrice": 37, "qty": 1, "cost": 37, "sells": [{"id": "s1", "qty": 1, "unitPrice": 71.66, "total": 71.66}], "status": "已售出", "source": "自己收的", "profit": 34.66, "imageUrl": "cardimg/151C-189.png"}, {"id": 2, "name": "超梦tt", "unitPrice": 25, "qty": 2, "cost": 0, "sells": [], "status": "未售出", "source": "自己收的", "imageUrl": "cardimg/CSM2bC-034.png", "profit": null}, {"id": 3, "name": "超梦tt", "unitPrice": 22, "qty": 2, "cost": 0, "sells": [], "status": "未售出", "source": "自己收的", "imageUrl": "cardimg/CSM2bC-034.png", "profit": null}, {"id": 4, "name": "超梦tt sr", "unitPrice": 0, "qty": 1, "cost": 0, "sells": [{"id": "s1", "qty": 1, "unitPrice": 150.0, "total": 150.0}], "status": "已售出", "source": "自己收的", "imageUrl": "cardimg/CSM2bC-164.png", "profit": 150.0}, {"id": 5, "name": "暴击蚊", "unitPrice": 60, "qty": 1, "cost": 60, "sells": [{"id": "s1", "qty": 1, "unitPrice": 100, "total": 100}], "status": "待签收", "source": "自己收的", "imageUrl": "cardimg/CSM2bC-158.png", "profit": 40}, {"id": 6, "name": "梦幻ex sar", "unitPrice": 623, "qty": 1, "cost": 623, "sells": [{"id": "s1", "qty": 1, "unitPrice": 785.6, "total": 785.6}], "status": "已售出", "source": "自己收的", "imageUrl": "cardimg/151C-191.png", "profit": 162.6}, {"id": 7, "name": "梦幻ex sar", "unitPrice": 578, "qty": 1, "cost": 578, "sells": [{"id": "s1", "qty": 1, "unitPrice": 900.0, "total": 900.0}], "status": "已售出", "source": "自己收的", "imageUrl": "cardimg/151C-191.png", "profit": 322.0}, {"id": 8, "name": "连击熊", "unitPrice": 335, "qty": 1, "cost": 335, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 9, "name": "洛奇亚", "unitPrice": 618, "qty": 1, "cost": 618, "sells": [{"id": "s1", "qty": 1, "unitPrice": 800.0, "total": 800.0}], "status": "已售出", "source": "自己收的", "imageUrl": "cardimg/CS6aC-146.png", "profit": 182.0}, {"id": 10, "name": "mega 灾兽", "unitPrice": 80, "qty": 1, "cost": 80, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 11, "name": "太阳tt", "unitPrice": 232, "qty": 1, "cost": 232, "sells": [{"id": "s1", "qty": 1, "unitPrice": 250.0, "total": 250.0}], "status": "已售出", "source": "自己收的", "imageUrl": "cardimg/CSM2bC-167.png", "profit": 18.0}, {"id": 12, "name": "线条伊布x9", "unitPrice": 2199, "qty": 1, "cost": 2199, "sells": [{"id": "s1", "qty": 1, "unitPrice": 3896.48, "total": 3896.48}], "status": "已售出", "source": "自己收的", "profit": 1697.48}, {"id": 13, "name": "线条皮卡丘", "unitPrice": 135, "qty": 1, "cost": 135, "sells": [{"id": "s1", "qty": 1, "unitPrice": 800.0, "total": 800.0}], "status": "已售出", "source": "自己收的", "profit": 665.0}, {"id": 14, "name": "胡地", "unitPrice": 38, "qty": 1, "cost": 38, "sells": [], "status": "未售出", "source": "自己收的", "profit": null, "imageUrl": "cardimg/151C-189.png"}, {"id": 15, "name": "龙柱v rr", "unitPrice": 2.3, "qty": 2, "cost": 4.6, "sells": [], "status": "未售出", "source": "自己收的", "imageUrl": "cardimg/CS6.5C-054.png", "profit": null}, {"id": 16, "name": "龙柱vs rrr", "unitPrice": 11.5, "qty": 4, "cost": 46, "sells": [], "status": "未售出", "source": "自己收的", "imageUrl": "cardimg/CS6.5C-055.png", "profit": null}, {"id": 17, "name": "龙柱v sr", "unitPrice": 21, "qty": 4, "cost": 84, "sells": [], "status": "未售出", "source": "自己收的", "imageUrl": "cardimg/CS6.5C-082.png", "profit": null}, {"id": 18, "name": "龙柱v sr", "unitPrice": 14, "qty": 1, "cost": 14, "sells": [], "status": "未售出", "source": "自己收的", "imageUrl": "cardimg/CS6.5C-082.png", "profit": null}, {"id": 19, "name": "龙柱v sr", "unitPrice": 172, "qty": 2, "cost": 344, "sells": [], "status": "未售出", "source": "自己收的", "imageUrl": "cardimg/CS6.5C-082.png", "profit": null}, {"id": 20, "name": "龙柱v sr", "unitPrice": 178, "qty": 3, "cost": 534, "sells": [], "status": "未售出", "source": "自己收的", "imageUrl": "cardimg/CS6.5C-082.png", "profit": null}, {"id": 21, "name": "叶伊布ex", "unitPrice": 255, "qty": 1, "cost": 255, "sells": [{"id": "s1", "qty": 1, "unitPrice": 405.36, "total": 405.36}], "status": "已售出", "source": "自己收的", "profit": 150.36}, {"id": 22, "name": "冰伊布ex", "unitPrice": 230, "qty": 1, "cost": 230, "sells": [{"id": "s1", "qty": 1, "unitPrice": 380.0, "total": 380.0}], "status": "已售出", "source": "自己收的", "profit": 150.0}, {"id": 23, "name": "利佳", "unitPrice": 40, "qty": 1, "cost": 40, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 24, "name": "剑豹ex sar", "unitPrice": 83, "qty": 2, "cost": 166, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 25, "name": "水龙v", "unitPrice": 105, "qty": 1, "cost": 105, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 26, "name": "皮卡丘v", "unitPrice": 15, "qty": 15, "cost": 225, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 27, "name": "伊布v", "unitPrice": 15, "qty": 16, "cost": 240, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 28, "name": "光辉伊布", "unitPrice": 34, "qty": 1, "cost": 34, "sells": [{"id": "s1", "qty": 1, "unitPrice": 60.0, "total": 60.0}], "status": "已售出", "source": "自己收的", "profit": 26.0}, {"id": 29, "name": "金恶能", "unitPrice": 54, "qty": 4, "cost": 216, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 30, "name": "博士sr", "unitPrice": 38, "qty": 1, "cost": 38, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 31, "name": "皮卡丘", "unitPrice": 22.3, "qty": 2, "cost": 44.6, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 32, "name": "雷公v", "unitPrice": 100, "qty": 1, "cost": 100, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 33, "name": "闪耀虫神", "unitPrice": 5, "qty": 1, "cost": 5, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 34, "name": "闪耀凤王", "unitPrice": 20, "qty": 3, "cost": 60, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 35, "name": "闪耀基拉祈", "unitPrice": 10, "qty": 1, "cost": 10, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 36, "name": "骨文巨声鳄sar", "unitPrice": 20, "qty": 1, "cost": 20, "sells": [{"id": "s1", "qty": 1, "unitPrice": 46.2, "total": 46.2}], "status": "已售出", "source": "自己收的", "profit": 26.2}, {"id": 37, "name": "雷伊布ex", "unitPrice": 183, "qty": 1, "cost": 183, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 38, "name": "线条月亮伊布", "unitPrice": 850, "qty": 1, "cost": 850, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 39, "name": "闪耀梦幻", "unitPrice": 0, "qty": 3, "cost": 0, "sells": [{"id": "s1", "qty": 1, "unitPrice": 100.0, "total": 100.0}], "status": "已售出", "source": "自己收的", "profit": 100.0}, {"id": 40, "name": "线条皮卡丘", "unitPrice": 812, "qty": 1, "cost": 812, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 41, "name": "洛奇亚", "unitPrice": 705, "qty": 1, "cost": 705, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 42, "name": "一击熊", "unitPrice": 140, "qty": 1, "cost": 140, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 43, "name": "皮卡丘vm", "unitPrice": 193, "qty": 1, "cost": 193, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 44, "name": "梦幻ex sar（有瑕）", "unitPrice": 600, "qty": 1, "cost": 600, "sells": [{"id": "s1", "qty": 1, "unitPrice": 785.08, "total": 785.08}], "status": "已售出", "source": "自己收的", "profit": 185.08}, {"id": 45, "name": "鬼龙sr", "unitPrice": 1000, "qty": 1, "cost": 1000, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 46, "name": "水伊布ex sar", "unitPrice": 238, "qty": 1, "cost": 238, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 47, "name": "牡丹", "unitPrice": 40, "qty": 3, "cost": 120, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 48, "name": "火恐龙", "unitPrice": 40, "qty": 1, "cost": 40, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 49, "name": "杰尼龟", "unitPrice": 30, "qty": 1, "cost": 30, "sells": [{"id": "s1", "qty": 1, "unitPrice": 106.82, "total": 106.82}], "status": "已售出", "source": "自己收的", "profit": 76.82}, {"id": 50, "name": "卡米龟", "unitPrice": 25, "qty": 1, "cost": 25, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 51, "name": "刃鬼3星", "unitPrice": 75.1, "qty": 1, "cost": 75.1, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 52, "name": "耿鬼vm", "unitPrice": 7.2, "qty": 2, "cost": 14.4, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 53, "name": "喵喵3星", "unitPrice": 120, "qty": 1, "cost": 120, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 54, "name": "刃鬼3星", "unitPrice": 60, "qty": 2, "cost": 120, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 55, "name": "梦妖魔3星", "unitPrice": 20, "qty": 1, "cost": 20, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 56, "name": "刃鬼3星", "unitPrice": 52, "qty": 1, "cost": 52, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 57, "name": "喷火龙ex", "unitPrice": 9, "qty": 1, "cost": 9, "sells": [{"id": "s1", "qty": 1, "unitPrice": 9.0, "total": 9.0}], "status": "已售出", "source": "自己收的", "profit": 0.0}, {"id": 58, "name": "铁包袱", "unitPrice": 9, "qty": 1, "cost": 9, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 59, "name": "刃鬼3星", "unitPrice": 45, "qty": 5, "cost": 225, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 60, "name": "水晶灯3星", "unitPrice": 20, "qty": 1, "cost": 20, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 61, "name": "派帕", "unitPrice": 180, "qty": 1, "cost": 180, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 62, "name": "电影超梦原包", "unitPrice": 164, "qty": 1, "cost": 164, "sells": [{"id": "s1", "qty": 1, "unitPrice": 380.0, "total": 380.0}], "status": "已售出", "source": "自己收的", "profit": 216.0}, {"id": 63, "name": "插画甲贺忍蛙", "unitPrice": 80, "qty": 1, "cost": 80, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 64, "name": "海豚侠ex", "unitPrice": 48, "qty": 1, "cost": 48, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 65, "name": "喷火龙vstar", "unitPrice": 170, "qty": 1, "cost": 170, "sells": [{"id": "s1", "qty": 1, "unitPrice": 244.16, "total": 244.16}], "status": "已售出", "source": "自己收的", "profit": 74.16}, {"id": 66, "name": "超梦vstar", "unitPrice": 160, "qty": 1, "cost": 160, "sells": [{"id": "s1", "qty": 1, "unitPrice": 244.16, "total": 244.16}], "status": "已售出", "source": "自己收的", "profit": 84.16}, {"id": 67, "name": "利欧路", "unitPrice": 13, "qty": 1, "cost": 13, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 68, "name": "火箭队的迷你q", "unitPrice": 23, "qty": 1, "cost": 23, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 69, "name": "N的捷克罗姆", "unitPrice": 56, "qty": 1, "cost": 56, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 70, "name": "mage雪妖女", "unitPrice": 18, "qty": 1, "cost": 18, "sells": [{"id": "s1", "qty": 1, "unitPrice": 25.0, "total": 25.0}], "status": "已售出", "source": "自己收的", "profit": 7.0}, {"id": 71, "name": "mage鳗鱼王", "unitPrice": 12, "qty": 1, "cost": 12, "sells": [{"id": "s1", "qty": 1, "unitPrice": 20.0, "total": 20.0}], "status": "已售出", "source": "自己收的", "profit": 8.0}, {"id": 72, "name": "mega沙奈朵", "unitPrice": 40, "qty": 1, "cost": 40, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 73, "name": "mega蒂安西", "unitPrice": 21, "qty": 1, "cost": 21, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 74, "name": "Mega卢卡利欧", "unitPrice": 40, "qty": 1, "cost": 40, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 75, "name": "Mega摔跤鹰人", "unitPrice": 12, "qty": 1, "cost": 12, "sells": [{"id": "s1", "qty": 1, "unitPrice": 20.0, "total": 20.0}], "status": "已售出", "source": "自己收的", "profit": 8.0}, {"id": 76, "name": "mega耿鬼", "unitPrice": 133.6, "qty": 1, "cost": 133.6, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 77, "name": "奇树的大电海燕", "unitPrice": 21, "qty": 1, "cost": 21, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 78, "name": "Mega流氓头头", "unitPrice": 14, "qty": 1, "cost": 14, "sells": [{"id": "s1", "qty": 1, "unitPrice": 20.0, "total": 20.0}], "status": "已售出", "source": "自己收的", "profit": 6.0}, {"id": 79, "name": "海豚侠ex", "unitPrice": 51, "qty": 1, "cost": 51, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 80, "name": "mega巨牙鲨sar", "unitPrice": 40, "qty": 1, "cost": 40, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 81, "name": "Mega流氓头头", "unitPrice": 7, "qty": 1, "cost": 7, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 82, "name": "mega 快龙", "unitPrice": 58, "qty": 1, "cost": 58, "sells": [{"id": "s1", "qty": 1, "unitPrice": 120.0, "total": 120.0}], "status": "已售出", "source": "自己收的", "profit": 62.0}, {"id": 83, "name": "ace枪", "unitPrice": 200, "qty": 1, "cost": 200, "sells": [{"id": "s1", "qty": 1, "unitPrice": 216.95, "total": 216.95}], "status": "已售出", "source": "自己收的", "profit": 16.95}, {"id": 84, "name": "mega 快龙", "unitPrice": 55, "qty": 2, "cost": 110, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 85, "name": "Mega卢卡利欧", "unitPrice": 33, "qty": 1, "cost": 33, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 86, "name": "忍蛙sar", "unitPrice": 514, "qty": 1, "cost": 514, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 87, "name": "忍蛙sar", "unitPrice": 474, "qty": 1, "cost": 474, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 88, "name": "古简蜗ex", "unitPrice": 17.3, "qty": 1, "cost": 17.3, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 89, "name": "赛富豪ex", "unitPrice": 11.9, "qty": 1, "cost": 11.9, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 90, "name": "耿鬼ex", "unitPrice": 44, "qty": 1, "cost": 44, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 91, "name": "排帕sar", "unitPrice": 117, "qty": 4, "cost": 468, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 92, "name": "mega喷火龙", "unitPrice": 190, "qty": 1, "cost": 190, "sells": [{"id": "s1", "qty": 1, "unitPrice": 291.5, "total": 291.5}], "status": "已售出", "source": "自己收的", "profit": 101.5}, {"id": 93, "name": "闪耀时拉比", "unitPrice": 21, "qty": 3, "cost": 63, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 94, "name": "闪耀凤王", "unitPrice": 24, "qty": 3, "cost": 72, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 95, "name": "闪耀洛奇亚", "unitPrice": 47.4, "qty": 3, "cost": 142.2, "sells": [{"id": "s1", "qty": 1, "unitPrice": 270.89, "total": 270.89}], "status": "已售出", "source": "自己收的", "profit": 128.69}, {"id": 96, "name": "闪耀阿尔宙斯", "unitPrice": 23.2, "qty": 4, "cost": 92.8, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 97, "name": "猛雷鼓sr", "unitPrice": 13, "qty": 2, "cost": 26, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 98, "name": "30周年草苗龟", "unitPrice": 12, "qty": 1, "cost": 12, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 99, "name": "30周年木木枭", "unitPrice": 20, "qty": 1, "cost": 20, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 100, "name": "30周年火斑喵", "unitPrice": 15, "qty": 1, "cost": 15, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 101, "name": "呆火鳄3星", "unitPrice": 7.28, "qty": 1, "cost": 7.28, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 102, "name": "长耳兔tt", "unitPrice": 8.8, "qty": 1, "cost": 8.8, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 103, "name": "沙奈朵tt", "unitPrice": 35.66, "qty": 1, "cost": 35.66, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 104, "name": "不公印章", "unitPrice": 39.88, "qty": 1, "cost": 39.88, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 105, "name": "洛奇亚sr", "unitPrice": 556, "qty": 1, "cost": 556, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 106, "name": "超级蒂安希ma", "unitPrice": 30, "qty": 1, "cost": 30, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 107, "name": "超级雪妖女ma", "unitPrice": 30, "qty": 1, "cost": 30, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 108, "name": "超级摔跤鹰人", "unitPrice": 30, "qty": 1, "cost": 30, "sells": [], "status": "未售出", "source": "自己收的", "profit": null}, {"id": 109, "name": "P10荷叶皮卡丘（简中）", "unitPrice": 988, "qty": 1, "cost": 988, "sells": [{"id": "s1", "qty": 1, "unitPrice": 1500.0, "total": 1500.0}], "status": "已售出", "source": "自己收的", "profit": 512.0}];
 
 const STORAGE_KEY = 'kajia_card_data';
+const SUPABASE_CONFIG_KEY = 'kajia_supabase_config';
 const DATA_URL_PREFIX = 'data:';
+const SUPABASE_DEFAULT_CONFIG = {
+  url: '',
+  anonKey: '',
+  table: 'card_app_state',
+  rowId: 'main'
+};
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 function formatMoney(val) {
@@ -699,6 +707,93 @@ function persistItemsToStorage(items) {
     }
   }
 }
+function normalizeSupabaseConfig(raw) {
+  const config = raw && typeof raw === 'object' ? raw : {};
+  return {
+    url: String(config.url || '').trim(),
+    anonKey: String(config.anonKey || '').trim(),
+    table: String(config.table || SUPABASE_DEFAULT_CONFIG.table).trim() || SUPABASE_DEFAULT_CONFIG.table,
+    rowId: String(config.rowId || SUPABASE_DEFAULT_CONFIG.rowId).trim() || SUPABASE_DEFAULT_CONFIG.rowId
+  };
+}
+function readSupabaseConfig() {
+  try {
+    const saved = localStorage.getItem(SUPABASE_CONFIG_KEY);
+    if (!saved) return { ...SUPABASE_DEFAULT_CONFIG };
+    return normalizeSupabaseConfig(JSON.parse(saved));
+  } catch (error) {
+    return { ...SUPABASE_DEFAULT_CONFIG };
+  }
+}
+function saveSupabaseConfig(config) {
+  const normalized = normalizeSupabaseConfig(config);
+  localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify(normalized));
+  return normalized;
+}
+function clearSupabaseConfig() {
+  localStorage.removeItem(SUPABASE_CONFIG_KEY);
+}
+function hasSupabaseCredentials(config) {
+  return Boolean(config?.url && config?.anonKey);
+}
+function createSupabaseBrowserClient(config) {
+  if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+    throw new Error('Supabase SDK 加载失败，请刷新页面重试');
+  }
+  return window.supabase.createClient(config.url, config.anonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false
+    }
+  });
+}
+async function fetchItemsFromSupabase(client, config) {
+  const { data, error } = await client
+    .from(config.table)
+    .select('payload, updated_at')
+    .eq('id', config.rowId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return { found: false, items: [], updatedAt: null };
+  return {
+    found: true,
+    items: normalizeItems(data.payload),
+    updatedAt: data.updated_at || null
+  };
+}
+async function saveItemsToSupabase(client, config, items) {
+  const payload = makeBackupSafeItems(items);
+  const now = new Date().toISOString();
+  const { error } = await client
+    .from(config.table)
+    .upsert(
+      {
+        id: config.rowId,
+        payload: payload.items,
+        updated_at: now
+      },
+      { onConflict: 'id' }
+    );
+  if (error) throw error;
+  return {
+    strippedImageCount: payload.strippedImageCount,
+    updatedAt: now
+  };
+}
+function formatDateTime(value) {
+  if (!value) return '';
+  try {
+    return new Date(value).toLocaleString('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch (error) {
+    return '';
+  }
+}
 
 
 
@@ -711,6 +806,88 @@ function Toast({ message, onDone }) {
     return () => clearTimeout(t);
   }, [onDone]);
   return <div className="toast">{message}</div>;
+}
+
+function CloudConfigModal({
+  config,
+  status,
+  error,
+  saving,
+  lastSyncedAt,
+  onChange,
+  onSave,
+  onDisconnect,
+  onClose
+}) {
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{maxWidth: 640}}>
+        <div className="modal-header">
+          <div className="modal-title">☁️ Supabase 云同步</div>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        <div className="modal-body">
+          <div className="profit-summary" style={{marginBottom: 18}}>
+            <div className="profit-row">
+              <span>当前状态</span>
+              <span style={{color: status === '已连接' ? 'var(--green)' : (status === '同步失败' || status === '连接失败' ? 'var(--red)' : 'var(--text)')}}>{status}</span>
+            </div>
+            {lastSyncedAt && (
+              <div className="profit-row">
+                <span>最近同步</span>
+                <span>{formatDateTime(lastSyncedAt)}</span>
+              </div>
+            )}
+            {error && (
+              <div className="profit-row" style={{color:'var(--red)', marginTop:8, paddingTop:8, borderTop:'1px solid var(--border)'}}>
+                <span>错误</span>
+                <span style={{maxWidth:320, textAlign:'right'}}>{error}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="modal-section-title">连接信息</div>
+          <div className="form-group">
+            <label className="form-label">Project URL</label>
+            <input
+              className="form-input"
+              value={config.url}
+              onChange={e => onChange('url', e.target.value)}
+              placeholder="https://xxxx.supabase.co"
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Anon Key</label>
+            <textarea
+              className="form-input"
+              value={config.anonKey}
+              onChange={e => onChange('anonKey', e.target.value)}
+              placeholder="粘贴 Supabase anon public key"
+              style={{minHeight: 110, resize: 'vertical'}}
+            />
+          </div>
+
+          <div className="modal-section-title">使用说明</div>
+          <div style={{fontSize:13, color:'var(--text-2)', lineHeight:1.7}}>
+            <div>1. 在 Supabase 新建项目后，先运行仓库里的 <code>supabase_setup.sql</code>。</div>
+            <div>2. 到 Project Settings → API，复制 Project URL 和 anon public key。</div>
+            <div>3. 保存后页面会优先从云端读取数据，之后所有修改都会自动同步。</div>
+          </div>
+
+          <div style={{marginTop:16, padding:'12px 14px', borderRadius:10, background:'rgba(240,136,62,0.1)', border:'1px solid rgba(240,136,62,0.25)', color:'#f6b26b', fontSize:12, lineHeight:1.6}}>
+            当前方案为了尽快跑通，默认是“持有 anon key 的人都能读写这张表”。个人使用没问题，如果后面要多人或正式长期使用，我们再补登录权限。
+          </div>
+        </div>
+        <div className="modal-footer" style={{justifyContent:'space-between'}}>
+          <button className="btn btn-danger" onClick={onDisconnect}>断开云端</button>
+          <div style={{display:'flex', gap:10}}>
+            <button className="btn btn-secondary" onClick={onClose}>取消</button>
+            <button className="btn btn-primary" onClick={onSave} disabled={saving}>{saving ? '连接中...' : '保存并连接'}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 
@@ -1400,6 +1577,7 @@ function BatchImageModal({ items, onUpdate, onClose, showToast }) {
 function App() {
   const [zoomedImage, setZoomedImage] = useState(null);
   const [activeTab, setActiveTab] = useState('main');
+  const [supabaseConfig, setSupabaseConfig] = useState(() => readSupabaseConfig());
   const [items, setItems] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -1437,8 +1615,87 @@ function App() {
   const [batchImage, setBatchImage] = useState(false);
   const [toast, setToast] = useState(null);
   const [page, setPage] = useState(1);
+  const [showCloudConfig, setShowCloudConfig] = useState(false);
+  const [cloudForm, setCloudForm] = useState(() => readSupabaseConfig());
+  const [cloudStatus, setCloudStatus] = useState(() => hasSupabaseCredentials(readSupabaseConfig()) ? '待连接' : '未配置');
+  const [cloudError, setCloudError] = useState('');
+  const [lastCloudSyncAt, setLastCloudSyncAt] = useState(null);
+  const [cloudBusy, setCloudBusy] = useState(false);
   const storageWarningShownRef = useRef(false);
+  const cloudWarningShownRef = useRef(false);
+  const itemsRef = useRef(items);
+  const remoteReadyRef = useRef(false);
+  const skipNextRemoteSaveRef = useRef(false);
+  const syncTimerRef = useRef(null);
+  const supabaseClientRef = useRef(null);
   const PAGE_SIZE = 20;
+
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
+  useEffect(() => {
+    return () => {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    remoteReadyRef.current = false;
+    supabaseClientRef.current = null;
+    setCloudError('');
+    setLastCloudSyncAt(null);
+
+    if (!hasSupabaseCredentials(supabaseConfig)) {
+      setCloudStatus('未配置');
+      remoteReadyRef.current = true;
+      return () => {};
+    }
+
+    async function initSupabaseSync() {
+      setCloudBusy(true);
+      setCloudStatus('连接中');
+      try {
+        const client = createSupabaseBrowserClient(supabaseConfig);
+        supabaseClientRef.current = client;
+        const remoteState = await fetchItemsFromSupabase(client, supabaseConfig);
+        if (cancelled) return;
+
+        if (remoteState.found) {
+          skipNextRemoteSaveRef.current = true;
+          setItems(remoteState.items);
+          setLastCloudSyncAt(remoteState.updatedAt);
+        } else {
+          const saveResult = await saveItemsToSupabase(client, supabaseConfig, itemsRef.current);
+          if (cancelled) return;
+          setLastCloudSyncAt(saveResult.updatedAt);
+          if (saveResult.strippedImageCount > 0 && !cloudWarningShownRef.current) {
+            cloudWarningShownRef.current = true;
+            showToast(`云端已跳过 ${saveResult.strippedImageCount} 张内嵌图片`);
+          }
+        }
+
+        setCloudStatus('已连接');
+      } catch (error) {
+        if (cancelled) return;
+        setCloudStatus('连接失败');
+        setCloudError(error?.message || 'Supabase 连接失败');
+      } finally {
+        if (!cancelled) {
+          remoteReadyRef.current = true;
+          setCloudBusy(false);
+        }
+      }
+    }
+
+    initSupabaseSync();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [supabaseConfig]);
 
   // Persist to localStorage
   useEffect(() => {
@@ -1449,7 +1706,81 @@ function App() {
     }
   }, [items]);
 
+  // Persist to Supabase
+  useEffect(() => {
+    if (!hasSupabaseCredentials(supabaseConfig)) return;
+    if (!remoteReadyRef.current) return;
+    if (!supabaseClientRef.current) return;
+    if (skipNextRemoteSaveRef.current) {
+      skipNextRemoteSaveRef.current = false;
+      return;
+    }
+
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(async () => {
+      setCloudBusy(true);
+      setCloudStatus('同步中');
+      setCloudError('');
+      try {
+        const saveResult = await saveItemsToSupabase(supabaseClientRef.current, supabaseConfig, itemsRef.current);
+        setLastCloudSyncAt(saveResult.updatedAt);
+        setCloudStatus('已连接');
+        if (saveResult.strippedImageCount > 0 && !cloudWarningShownRef.current) {
+          cloudWarningShownRef.current = true;
+          showToast(`云端已跳过 ${saveResult.strippedImageCount} 张内嵌图片`);
+        }
+      } catch (error) {
+        setCloudStatus('同步失败');
+        setCloudError(error?.message || '云端同步失败');
+      } finally {
+        setCloudBusy(false);
+      }
+    }, 700);
+
+    return () => {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    };
+  }, [items, supabaseConfig]);
+
   function showToast(msg) { setToast(msg); }
+
+  function handleCloudFormChange(field, value) {
+    setCloudForm(prev => ({ ...prev, [field]: value }));
+  }
+
+  function handleCloudSave() {
+    const nextConfig = normalizeSupabaseConfig(cloudForm);
+    if (!nextConfig.url || !nextConfig.anonKey) {
+      showToast('请先填写 Supabase URL 和 anon key');
+      return;
+    }
+    const savedConfig = saveSupabaseConfig(nextConfig);
+    setSupabaseConfig(savedConfig);
+    setCloudForm(savedConfig);
+    setShowCloudConfig(false);
+    showToast('已保存 Supabase 配置');
+  }
+
+  function handleCloudDisconnect() {
+    clearSupabaseConfig();
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    supabaseClientRef.current = null;
+    remoteReadyRef.current = true;
+    const resetConfig = { ...SUPABASE_DEFAULT_CONFIG };
+    setSupabaseConfig(resetConfig);
+    setCloudForm(resetConfig);
+    setCloudStatus('未配置');
+    setCloudError('');
+    setLastCloudSyncAt(null);
+    setShowCloudConfig(false);
+    showToast('已切换回本地模式');
+  }
+
+  const cloudStatusColor = cloudStatus === '已连接'
+    ? 'var(--green)'
+    : (cloudStatus === '同步失败' || cloudStatus === '连接失败'
+      ? 'var(--red)'
+      : (cloudStatus === '同步中' || cloudStatus === '连接中' ? 'var(--orange)' : 'var(--text-3)'));
 
   // Helper: get sortable value from item (supports computed fields)
   const getSortVal = useCallback((item, field) => {
@@ -1639,6 +1970,23 @@ function App() {
             卡价管理后台 <small>卡牌库存系统</small>
           </div>
           <div className="header-actions">
+            <div style={{
+              display:'flex',
+              alignItems:'center',
+              gap:8,
+              padding:'7px 12px',
+              borderRadius:999,
+              border:'1px solid rgba(255,255,255,0.08)',
+              background:'rgba(22,27,35,0.65)',
+              color:'var(--text-2)',
+              fontSize:12,
+              fontWeight:600
+            }}>
+              <span style={{width:8, height:8, borderRadius:'50%', background:cloudStatusColor, boxShadow:`0 0 10px ${cloudStatusColor}`}}></span>
+              <span>云端{cloudStatus}</span>
+              {lastCloudSyncAt && <span style={{color:'var(--text-3)'}}>{formatDateTime(lastCloudSyncAt)}</span>}
+            </div>
+            <button className="btn btn-secondary" onClick={() => setShowCloudConfig(true)}>{cloudBusy ? '☁️ 同步中' : '☁️ 云端设置'}</button>
             <button className="btn btn-secondary" onClick={saveBackup}>💾 保存备份</button>
             <button className="btn btn-secondary" onClick={() => document.getElementById('importFileInput').click()}>📂 导入备份</button>
             <input id="importFileInput" type="file" accept=".json" style={{display:'none'}} onChange={e => {
@@ -1880,6 +2228,19 @@ function App() {
 
       {/* Modal */}
       {editingItem && <EditModal item={editingItem} onSave={handleSave} onClose={() => setEditingItem(null)} onToast={setToast} />}
+      {showCloudConfig && (
+        <CloudConfigModal
+          config={cloudForm}
+          status={cloudStatus}
+          error={cloudError}
+          saving={cloudBusy}
+          lastSyncedAt={lastCloudSyncAt}
+          onChange={handleCloudFormChange}
+          onSave={handleCloudSave}
+          onDisconnect={handleCloudDisconnect}
+          onClose={() => setShowCloudConfig(false)}
+        />
+      )}
 
       {/* Toast */}
       {toast && <Toast message={toast} onDone={() => setToast(null)} />}
