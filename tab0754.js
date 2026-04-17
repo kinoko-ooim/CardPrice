@@ -8,6 +8,7 @@ function Tab0754() {
     catch(e) { return []; }
   });
   var records = rS[0], setRecords = rS[1];
+  var fileInputRef = React.useRef(null);
   var iaS = React.useState('');
   var inputAmount = iaS[0], setInputAmount = iaS[1];
   var ldS = React.useState(false);
@@ -28,30 +29,98 @@ function Tab0754() {
     setRecords(data);
   }
 
+  function parseAmountCell(value) {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      var cleaned = value.replace(/[,\s¥￥]/g, '');
+      var parsed = parseFloat(cleaned);
+      if (!isNaN(parsed)) return parsed;
+    }
+    return null;
+  }
+
+  function getTodayString() {
+    return new Date().toLocaleDateString('en-CA');
+  }
+
+  function parseExcelBuffer(buf) {
+    if (!window.XLSX) throw new Error('Excel 解析库未加载，请刷新页面后重试');
+    var wb = XLSX.read(new Uint8Array(buf), {type: 'array'});
+    var sn = wb.SheetNames.find(function(n) { return String(n).includes('0754') || String(n).includes('754'); })
+      || wb.SheetNames.find(function(n) { return String(n).includes('售出'); })
+      || wb.SheetNames[0];
+    var ws = wb.Sheets[sn];
+    if (!ws) throw new Error('Excel 中没有可读取的工作表');
+
+    var vals = [];
+    for (var row = 3; row <= 24; row++) {
+      var cell = ws['B' + row];
+      var amount = cell ? parseAmountCell(cell.v) : null;
+      if (amount !== null) vals.push(amount);
+    }
+
+    if (vals.length === 0) {
+      throw new Error('没有在工作表 B3:B24 里读到金额，请检查 Excel 内容');
+    }
+
+    var today = getTodayString();
+    return vals.map(function(v, i) {
+      return { id: Date.now() + i, date: today, amount: v, createdAt: new Date().toISOString() };
+    });
+  }
+
+  async function importExcelFromBuffer(buf) {
+    var parsed = parseExcelBuffer(buf);
+    saveRecords(parsed);
+    setError(null);
+  }
+
+  async function loadBundledExcel() {
+    var resp = await fetch('./卡价.xlsx');
+    if (!resp.ok) {
+      throw new Error(resp.status === 404
+        ? '未找到线上 Excel 文件，已为你切换到本地选文件导入'
+        : '读取 Excel 失败（HTTP ' + resp.status + '）');
+    }
+    var buf = await resp.arrayBuffer();
+    await importExcelFromBuffer(buf);
+  }
+
   async function loadFromExcel() {
     setLoading(true);
     setError(null);
     try {
-      var resp = await fetch('./卡价.xlsx');
-      if (!resp.ok) throw new Error('ERR');
-      var buf = await resp.arrayBuffer();
-      var wb = XLSX.read(new Uint8Array(buf), {type: 'array'});
-      var sn = wb.SheetNames.find(function(n) { return n.includes('754'); }) || '754售出';
-      var ws = wb.Sheets[sn];
-      if (!ws) throw new Error('NO_SHEET');
-      var vals = [];
-      for (var r = 2; r <= 23; r++) {
-        var c = ws['B' + (r + 1)];
-        if (c && typeof c.v === 'number') vals.push(c.v);
-      }
-      var today = new Date().toISOString().slice(0, 10);
-      saveRecords(vals.map(function(v, i) {
-        return { id: i, date: today, amount: v, createdAt: new Date().toISOString() };
-      }));
+      await loadBundledExcel();
     } catch(e) {
-      setError(String(e.message));
+      var msg = String(e && e.message ? e.message : e);
+      if (msg.indexOf('未找到线上 Excel 文件') !== -1 && fileInputRef.current) {
+        fileInputRef.current.value = '';
+        fileInputRef.current.click();
+      } else {
+        setError(msg);
+      }
     }
     setLoading(false);
+  }
+
+  function handleExcelFileChange(e) {
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    setLoading(true);
+    setError(null);
+
+    file.arrayBuffer()
+      .then(function(buf) {
+        return importExcelFromBuffer(buf);
+      })
+      .catch(function(err) {
+        setError(String(err && err.message ? err.message : err));
+      })
+      .finally(function() {
+        setLoading(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      });
   }
 
   function addRecord() {
@@ -126,6 +195,13 @@ function Tab0754() {
     C('button', P({className:'btn btn-secondary', onClick:loadFromExcel, disabled:loading},
       S('style', {fontSize:12,padding:'4px 12px'})),
       loading ? '\u52A0\u8F7D\u4E2D...' : (records.length === 0 ? '\u4ECEExcel\u5BFC\u5165' : '\u4ECEExcel\u91CD\u7F6E')),
+    C('input', {
+      ref: fileInputRef,
+      type: 'file',
+      accept: '.xlsx,.xls',
+      style: {display:'none'},
+      onChange: handleExcelFileChange
+    }),
     C('select', P({value:sortField+'|'+sortDir, onChange:function(e) {
       var p = e.target.value.split('|'); setSortField(p[0]); setSortDir(p[1]);
     }}, S('style', {marginLeft:8,padding:'6px 10px',borderRadius:6,
@@ -279,7 +355,10 @@ function Tab0754() {
 
   var errorEl = error ? C('div', S('style', {
     background:'rgba(248,81,73,0.1)', border:'1px solid rgba(248,81,73,0.3)',
-    borderRadius:10, padding:'16px 20px', color:'#f85149', marginTop:16}), ' ', error) : null;
+    borderRadius:10, padding:'16px 20px', color:'#f85149', marginTop:16}),
+    C('div', S('style', {fontWeight:700, marginBottom:6}), '导入失败'),
+    C('div', null, error)
+  ) : null;
 
   return C('div', S('style', {maxWidth:1400, margin:'0 auto', padding:'24px 32px 48px'}),
     titleBar, inputArea, statsArea, dateFilter, tableArea, errorEl
