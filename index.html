@@ -761,6 +761,26 @@ function makeBackupSafeItems(items) {
   });
   return { items: safeItems, strippedImageCount };
 }
+async function saveBlobWithPicker(blob, suggestedName, options) {
+  if (window.showSaveFilePicker) {
+    const handle = await window.showSaveFilePicker({
+      suggestedName,
+      types: options?.types || []
+    });
+    const writable = await handle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    return { savedWithPicker: true };
+  }
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = suggestedName;
+  a.click();
+  URL.revokeObjectURL(url);
+  return { savedWithPicker: false };
+}
 function persistItemsToStorage(items) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
@@ -1904,13 +1924,11 @@ function OldCardInventoryTab({ showToast }) {
     });
     const csv = [headers, ...exportRows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = '老卡出售记录_' + new Date().toISOString().slice(0,10) + '.csv';
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('老卡 CSV 已下载 ✓');
+    saveBlobWithPicker(blob, '老卡出售记录_' + new Date().toISOString().slice(0,10) + '.csv', {
+      types: [{ description: 'CSV 文件', accept: { 'text/csv': ['.csv'] } }]
+    })
+      .then(() => showToast('老卡 CSV 已保存 ✓'))
+      .catch(() => showToast('老卡 CSV 保存失败'));
   }
 
   function saveBackup() {
@@ -1921,13 +1939,11 @@ function OldCardInventoryTab({ showToast }) {
       items: backupPayload.items
     };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = '老卡出售记录备份_' + new Date().toISOString().slice(0, 10) + '.json';
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('老卡备份已保存 ✓');
+    saveBlobWithPicker(blob, '老卡出售记录备份_' + new Date().toISOString().slice(0, 10) + '.json', {
+      types: [{ description: 'JSON 文件', accept: { 'application/json': ['.json'] } }]
+    })
+      .then(() => showToast('老卡备份已保存 ✓'))
+      .catch(() => showToast('老卡备份保存失败'));
   }
 
   const totalCards = items.reduce((sum, i) => sum + (i.qty || 1), 0);
@@ -2500,11 +2516,11 @@ function App({ onLock }) {
     });
     const csv = [headers, ...exportRows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = '卡价管理_' + new Date().toISOString().slice(0,10) + '.csv';
-    a.click(); URL.revokeObjectURL(url);
-    showToast('CSV 已下载 ✓');
+    saveBlobWithPicker(blob, '卡价管理_' + new Date().toISOString().slice(0,10) + '.csv', {
+      types: [{ description: 'CSV 文件', accept: { 'text/csv': ['.csv'] } }]
+    })
+      .then(() => showToast('CSV 已保存 ✓'))
+      .catch(() => showToast('CSV 保存失败'));
   }
 
   function saveBackup() {
@@ -2517,16 +2533,18 @@ function App({ onLock }) {
       items: backupPayload.items
     };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
     const date = new Date().toISOString().slice(0, 10);
-    a.href = url; a.download = '卡价备份_' + date + '.json';
-    a.click(); URL.revokeObjectURL(url);
-    if (backupPayload.strippedImageCount > 0) {
-      showToast(`备份已保存 ✓ 已精简 ${backupPayload.strippedImageCount} 张内嵌图片`);
-    } else {
-      showToast('备份已保存 ✓');
-    }
+    saveBlobWithPicker(blob, '卡价备份_' + date + '.json', {
+      types: [{ description: 'JSON 文件', accept: { 'application/json': ['.json'] } }]
+    })
+      .then(() => {
+        if (backupPayload.strippedImageCount > 0) {
+          showToast(`备份已保存 ✓ 已精简 ${backupPayload.strippedImageCount} 张内嵌图片`);
+        } else {
+          showToast('备份已保存 ✓');
+        }
+      })
+      .catch(() => showToast('备份保存失败'));
   }
 
   // Stats
