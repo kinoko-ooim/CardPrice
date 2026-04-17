@@ -779,6 +779,19 @@ function slugifyPathPart(value, fallback) {
     .replace(/^-+|-+$/g, '');
   return normalized || fallback;
 }
+function preloadImageUrl(url) {
+  return new Promise((resolve, reject) => {
+    if (!url) {
+      reject(new Error('图片地址为空'));
+      return;
+    }
+    const img = new Image();
+    img.onload = () => resolve(url);
+    img.onerror = () => reject(new Error('图片不存在或当前站点无法直接访问'));
+    img.referrerPolicy = 'no-referrer';
+    img.src = url;
+  });
+}
 async function dataUrlToBlob(dataUrl) {
   const response = await fetch(dataUrl);
   return response.blob();
@@ -1092,33 +1105,16 @@ function EditModal({ item, onSave, onClose, onToast }) {
     setIsLoadingImage(true);
 
     try {
-      // 尝试 tcg.mik.moe 图片源 (PNG格式)
       const url = `https://tcg.mik.moe/static/img/${setCode}/${cardNum}.png`;
-      console.log('尝试下载:', url);
-
-      const response = await fetch(url);
-      if (response.ok) {
-        const blob = await response.blob();
-        const reader = new FileReader();
-        reader.onload = () => {
-          setForm(prev => ({ ...prev, imageUrl: reader.result, cardCode: cardCode }));
-          setIsLoadingImage(false);
-          const input = document.getElementById('cardCodeInput');
-          if (input) input.value = cardCode;
-          onToast?.(`✅ 图片已获取，编号 ${cardCode} 已关联（请点击保存）`);
-        };
-        reader.onerror = () => {
-          alert('❌ 图片转换失败');
-          setIsLoadingImage(false);
-        };
-        reader.readAsDataURL(blob);
-      } else {
-        alert(`❌ 图片不存在，HTTP ${response.status}`);
-        setIsLoadingImage(false);
-      }
+      await preloadImageUrl(url);
+      setForm(prev => ({ ...prev, imageUrl: url, cardCode: cardCode }));
+      const input = document.getElementById('cardCodeInput');
+      if (input) input.value = cardCode;
+      onToast?.(`✅ 图片已获取，编号 ${cardCode} 已关联（请点击保存）`);
     } catch (e) {
       console.error('下载失败:', e);
-      alert('❌ 下载失败: ' + e.message);
+      alert('❌ 获取图片失败: ' + e.message);
+    } finally {
       setIsLoadingImage(false);
     }
   }
@@ -1523,22 +1519,6 @@ function BatchImageModal({ items, onUpdate, onClose, showToast }) {
     return 'https://tcg.mik.moe/static/img/' + series + '/' + num + '.png';
   }
 
-  // 从URL下载并转为base64
-  async function downloadAsBase64(url) {
-    try {
-      const response = await fetch(url);
-      if (!response.ok) return null;
-      const blob = await response.blob();
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.readAsDataURL(blob);
-      });
-    } catch {
-      return null;
-    }
-  }
-
   async function handleApply() {
     const lines = text.trim().split('\n').filter(l => l.trim());
     if (lines.length === 0) {
@@ -1549,9 +1529,9 @@ function BatchImageModal({ items, onUpdate, onClose, showToast }) {
     setLoading(true);
     let updated = 0;
     let skipped = 0;
-    const cardMap = {}; // 缓存: 编号 -> base64 URL
+    const cardMap = {}; // 缓存: 编号 -> 图片 URL
 
-    // 解析输入并下载图片
+    // 解析输入并校验图片地址
     for (const line of lines) {
       const parts = line.split(/[\t,]/); // 支持 Tab 或逗号分隔
       const name = parts[0]?.trim();
@@ -1577,9 +1557,11 @@ function BatchImageModal({ items, onUpdate, onClose, showToast }) {
       }
 
       if (!cardMap[code]) {
-        const base64 = await downloadAsBase64(url);
-        if (base64) {
-          cardMap[code] = base64;
+        try {
+          await preloadImageUrl(url);
+          cardMap[code] = url;
+        } catch {
+          cardMap[code] = null;
         }
       }
 
