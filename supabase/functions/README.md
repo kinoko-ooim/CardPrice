@@ -24,6 +24,7 @@
 3. 把 [index.ts](/Users/chenyuanxi/Desktop/卡价/supabase/functions/card-screenshot-extract-v1/index.ts) 的内容完整粘进去
 4. 在项目的 `Edge Functions -> Secrets` 里添加：
    `OPENAI_API_KEY=你的 OpenAI API Key`
-5. 保存并部署
+5. 在这个函数的设置里关闭 `Verify JWT`
+6. 保存并部署
 
 部署完成后，网页里的“AI识别”会把截图发给这个云函数，返回结构化的商品记录草稿，再由你确认导入。
