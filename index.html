@@ -607,6 +607,7 @@ const DATA_URL_PREFIX = 'data:';
 const ACCESS_SESSION_KEY = 'kajia_access_granted';
 const ACCESS_PASSWORD_HASH = '1549c7def3809f8916e748ac0b005fb002f912cd03a60bbd7919e40de0576c5f';
 const SUPABASE_IMAGE_LOOKUP_FUNCTION = 'card-image-lookup-v2';
+const SUPABASE_SCREENSHOT_AI_FUNCTION = 'card-screenshot-extract-v1';
 const SUPABASE_DEFAULT_CONFIG = {
   url: 'https://hnnzyrslsmpankpkhjho.supabase.co',
   anonKey: 'sb_publishable_-rtge5LdKWSnkwKUFWc-aQ_gu3Q8vj0',
@@ -873,6 +874,24 @@ async function lookupCardImageViaEdgeFunction(cardCode) {
     imageUrl,
     pageUrl: data?.pageUrl || data?.page_url || '',
     setName: data?.setName || data?.set_name || ''
+  };
+}
+async function extractScreenshotItemsViaAi(imageDataUrl) {
+  const config = readSupabaseConfig();
+  if (!hasSupabaseCredentials(config)) {
+    throw new Error('云端未配置，暂时无法使用 AI 识别');
+  }
+  const client = createSupabaseBrowserClient(config);
+  const { data, error } = await client.functions.invoke(SUPABASE_SCREENSHOT_AI_FUNCTION, {
+    body: { imageDataUrl }
+  });
+  if (error) {
+    throw new Error(error.message || 'AI 云函数调用失败');
+  }
+  return {
+    items: Array.isArray(data?.items) ? data.items : [],
+    rawText: data?.rawText || '',
+    model: data?.model || ''
   };
 }
 async function fetchItemsFromSupabase(client, config) {
@@ -1531,6 +1550,7 @@ function CloudConfigModal({
             <div>1. 在 Supabase 新建项目后，先运行仓库里的 <code>supabase_setup.sql</code>，它会同时创建数据表和图片存储桶。</div>
             <div>2. 到 Project Settings → API，复制 Project URL 和 anon public key。</div>
             <div>3. 保存后页面会优先从云端读取数据，上传的本地图片会自动转存到 Supabase Storage。</div>
+            <div>4. 如果要用“截图 AI 识别”，还要再部署 <code>card-screenshot-extract-v1</code>，并在 Edge Functions Secrets 里配置 <code>OPENAI_API_KEY</code>。</div>
           </div>
 
           <div style={{marginTop:16, padding:'12px 14px', borderRadius:10, background:'rgba(240,136,62,0.1)', border:'1px solid rgba(240,136,62,0.25)', color:'#f6b26b', fontSize:12, lineHeight:1.6}}>
@@ -1942,6 +1962,7 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
   const [progressText, setProgressText] = useState('');
   const [rawText, setRawText] = useState('');
   const [drafts, setDrafts] = useState([]);
+  const [lastMethod, setLastMethod] = useState('');
 
   function updateDraft(index, field, value) {
     setDrafts(prev => prev.map((item, idx) => {
@@ -1965,12 +1986,32 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
     setFile(selectedFile);
     setRawText('');
     setDrafts([]);
+    setLastMethod('');
     const reader = new FileReader();
     reader.onload = ev => setPreviewUrl(String(ev.target?.result || ''));
     reader.readAsDataURL(selectedFile);
   }
 
-  async function handleRecognize() {
+  function normalizeRecognizedDrafts(items) {
+    return items
+      .map(item => ({
+        ...item,
+        name: String(item.name || '').trim(),
+        cardCode: String(item.cardCode || '').trim(),
+        note: String(item.note || '').trim(),
+        sourceText: String(item.sourceText || '').trim(),
+        unitPrice: item.unitPrice === '' ? null : item.unitPrice,
+        qty: parseInt(item.qty, 10) || 1,
+        status: item.status || '未售出',
+        source: item.source || '截图识别',
+        sells: [],
+        profit: null,
+        cost: item.unitPrice === null || item.unitPrice === '' ? 0 : round2((parseFloat(item.unitPrice) || 0) * (parseInt(item.qty, 10) || 1))
+      }))
+      .filter(item => item.name);
+  }
+
+  async function handleRecognizeLocal() {
     if (!file) {
       showToast('请先上传截图');
       return;
@@ -1981,6 +2022,7 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
     }
 
     setLoading(true);
+    setLastMethod('本地OCR');
     setProgressText('正在识别文字...');
     setRawText('');
     setDrafts([]);
@@ -2017,21 +2059,40 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
     }
   }
 
+  async function handleRecognizeAi() {
+    if (!file || !previewUrl) {
+      showToast('请先上传截图');
+      return;
+    }
+
+    setLoading(true);
+    setLastMethod('AI识别');
+    setProgressText('正在调用 AI 识别截图...');
+    setRawText('');
+    setDrafts([]);
+
+    try {
+      const result = await extractScreenshotItemsViaAi(previewUrl);
+      const normalized = normalizeRecognizedDrafts(result.items || []);
+      const enriched = await enrichRecognizedItemsWithImages(normalized);
+      setDrafts(enriched);
+      setRawText(result.rawText || '');
+      if (enriched.length === 0) {
+        showToast('AI 没有识别出可导入商品，请换一张更清晰的截图试试');
+      } else {
+        showToast(`AI 已识别 ${enriched.length} 条商品，请确认后导入`);
+      }
+    } catch (error) {
+      console.error('AI 截图识别失败', error);
+      showToast(error?.message || 'AI 截图识别失败');
+    } finally {
+      setLoading(false);
+      setProgressText('');
+    }
+  }
+
   function handleImport() {
-    const normalized = drafts
-      .map(item => ({
-        ...item,
-        name: String(item.name || '').trim(),
-        cardCode: String(item.cardCode || '').trim(),
-        unitPrice: item.unitPrice === '' ? null : item.unitPrice,
-        qty: parseInt(item.qty, 10) || 1,
-        cost: item.unitPrice === null || item.unitPrice === '' ? 0 : round2((parseFloat(item.unitPrice) || 0) * (parseInt(item.qty, 10) || 1)),
-        status: item.status || '未售出',
-        source: item.source || '截图识别',
-        sells: [],
-        profit: null
-      }))
-      .filter(item => item.name);
+    const normalized = normalizeRecognizedDrafts(drafts);
 
     if (normalized.length === 0) {
       showToast('请至少保留一条有效商品');
@@ -2063,11 +2124,14 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
             </label>
             <div style={{flex:'1 1 320px', minWidth:260}}>
               <div style={{fontSize:13, color:'var(--text-2)', lineHeight:1.7, marginBottom:12}}>
-                支持识别截图里的卡名、编号、价格和数量。第一版建议上传清晰、完整、背景干净的商品列表截图。
+                支持识别截图里的卡名、编号、价格和数量。推荐优先用 AI 识别；本地 OCR 继续保留，适合作为备用方案。
               </div>
               <div style={{display:'flex', gap:10, flexWrap:'wrap'}}>
-                <button className="btn btn-primary" onClick={handleRecognize} disabled={!file || loading}>
-                  {loading ? '识别中...' : '开始识别'}
+                <button className="btn btn-primary" onClick={handleRecognizeAi} disabled={!file || loading}>
+                  {loading && lastMethod === 'AI识别' ? 'AI 识别中...' : 'AI识别（推荐）'}
+                </button>
+                <button className="btn btn-secondary" onClick={handleRecognizeLocal} disabled={!file || loading}>
+                  {loading && lastMethod === '本地OCR' ? 'OCR 识别中...' : '本地OCR'}
                 </button>
                 <label className="btn btn-secondary" style={{cursor:'pointer'}}>
                   重新选图
@@ -2083,6 +2147,11 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
           {drafts.length > 0 && (
             <>
               <div className="modal-section-title" style={{marginTop:20}}>识别结果确认</div>
+              {lastMethod && (
+                <div style={{marginBottom:10, fontSize:12, color:'var(--text-2)'}}>
+                  当前结果来源：<span style={{color:'#60a5fa'}}>{lastMethod}</span>
+                </div>
+              )}
               <div style={{display:'flex', flexDirection:'column', gap:12}}>
                 {drafts.map((item, index) => (
                   <div key={`${item.cardCode || item.name}-${index}`} style={{border:'1px solid var(--border)', borderRadius:12, padding:14, background:'rgba(13,17,23,0.55)'}}>
@@ -2103,6 +2172,12 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
                     <div style={{marginTop:8, fontSize:12, color:'var(--text-2)'}}>
                       成本会按 单价 × 数量 自动生成，导入后状态默认设为“未售出”。
                     </div>
+                    {(item.note || item.sourceText) && (
+                      <div style={{marginTop:8, display:'flex', gap:12, flexWrap:'wrap', fontSize:12, color:'var(--text-2)'}}>
+                        {item.note ? <span>备注：{item.note}</span> : null}
+                        {item.sourceText ? <span>识别依据：{item.sourceText}</span> : null}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -2111,7 +2186,7 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
 
           {rawText && (
             <>
-              <div className="modal-section-title" style={{marginTop:20}}>OCR 原始文本</div>
+              <div className="modal-section-title" style={{marginTop:20}}>{lastMethod === 'AI识别' ? 'AI 原始输出' : 'OCR 原始文本'}</div>
               <textarea
                 className="form-input"
                 style={{minHeight:140, resize:'vertical', fontFamily:'var(--mono, monospace)'}}
