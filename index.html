@@ -1092,8 +1092,194 @@ function isLikelyNameLine(line) {
 function cleanupRecognizedName(line) {
   return normalizeOcrLine(line)
     .replace(/\b(?:SR|SAR|AR|CHR|CSR|RRR|RR|UR)\b/gi, '')
+    .replace(/[¥]\s*[0-9]+(?:\.[0-9]+)?/g, '')
+    .replace(/x\s*\d{1,3}/gi, '')
+    .replace(/PSA\s*\d+/gi, '')
+    .replace(/\b无标记\b/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function extractNameFromWords(words) {
+  const text = (words || [])
+    .map(word => String((word && word.text) || '').trim())
+    .filter(Boolean)
+    .join(' ');
+  const cleaned = cleanupRecognizedName(text);
+  if (!cleaned) return '';
+  return /[\u4e00-\u9fffA-Za-z]/.test(cleaned) ? cleaned : '';
+}
+
+function normalizeOcrWord(word) {
+  if (!word || typeof word !== 'object') return null;
+  const text = normalizeOcrLine(word.text || '');
+  if (!text) return null;
+  const bbox = word.bbox || {};
+  const x0 = Number.isFinite(bbox.x0) ? bbox.x0 : 0;
+  const y0 = Number.isFinite(bbox.y0) ? bbox.y0 : 0;
+  const x1 = Number.isFinite(bbox.x1) ? bbox.x1 : x0;
+  const y1 = Number.isFinite(bbox.y1) ? bbox.y1 : y0;
+  return {
+    text,
+    x0,
+    y0,
+    x1,
+    y1,
+    cx: (x0 + x1) / 2,
+    cy: (y0 + y1) / 2,
+    width: Math.max(1, x1 - x0),
+    height: Math.max(1, y1 - y0),
+    confidence: Number(word.confidence || 0)
+  };
+}
+
+function buildLineFromWords(words) {
+  const sorted = [...words].sort((a, b) => a.x0 - b.x0);
+  return {
+    words: sorted,
+    text: sorted.map(word => word.text).join(' ').trim(),
+    x0: Math.min(...sorted.map(word => word.x0)),
+    y0: Math.min(...sorted.map(word => word.y0)),
+    x1: Math.max(...sorted.map(word => word.x1)),
+    y1: Math.max(...sorted.map(word => word.y1)),
+    cx: (Math.min(...sorted.map(word => word.x0)) + Math.max(...sorted.map(word => word.x1))) / 2,
+    cy: (Math.min(...sorted.map(word => word.y0)) + Math.max(...sorted.map(word => word.y1))) / 2,
+    height: Math.max(...sorted.map(word => word.y1)) - Math.min(...sorted.map(word => word.y0))
+  };
+}
+
+function groupOcrWordsIntoLines(words) {
+  const normalizedWords = (words || [])
+    .map(normalizeOcrWord)
+    .filter(Boolean)
+    .filter(word => word.confidence >= 15 || /[\u4e00-\u9fffA-Za-z0-9¥]/.test(word.text))
+    .sort((a, b) => (a.cy - b.cy) || (a.x0 - b.x0));
+
+  const lines = [];
+  for (const word of normalizedWords) {
+    const lastLine = lines[lines.length - 1];
+    const tolerance = Math.max(12, word.height * 0.7);
+    if (lastLine && Math.abs(lastLine.cy - word.cy) <= tolerance) {
+      lastLine.words.push(word);
+      lastLine.y0 = Math.min(lastLine.y0, word.y0);
+      lastLine.y1 = Math.max(lastLine.y1, word.y1);
+      lastLine.x0 = Math.min(lastLine.x0, word.x0);
+      lastLine.x1 = Math.max(lastLine.x1, word.x1);
+      lastLine.cy = (lastLine.y0 + lastLine.y1) / 2;
+    } else {
+      lines.push({
+        words: [word],
+        x0: word.x0,
+        y0: word.y0,
+        x1: word.x1,
+        y1: word.y1,
+        cy: word.cy
+      });
+    }
+  }
+  return lines.map(line => buildLineFromWords(line.words));
+}
+
+function parseProductsFromOcrWords(words) {
+  const normalizedWords = (words || [])
+    .map(normalizeOcrWord)
+    .filter(Boolean);
+
+  const lines = groupOcrWordsIntoLines(words)
+    .map(line => ({ ...line, text: normalizeOcrLine(line.text) }))
+    .filter(line => line.text);
+
+  if (!lines.length || !normalizedWords.length) return [];
+
+  const pageWidth = Math.max(...lines.map(line => line.x1), 1);
+  const codeLines = lines.filter(line => extractCardCodeFromLine(line.text));
+  if (!codeLines.length) return [];
+
+  const products = codeLines.map((codeLine, index) => {
+    const prev = codeLines[index - 1];
+    const next = codeLines[index + 1];
+    const upperBound = prev ? (prev.cy + codeLine.cy) / 2 : 0;
+    const lowerBound = next ? (codeLine.cy + next.cy) / 2 : Number.POSITIVE_INFINITY;
+    const blockLines = lines.filter(line => line.cy >= upperBound && line.cy < lowerBound);
+    const blockWords = normalizedWords.filter(word => word.cy >= upperBound && word.cy < lowerBound);
+    const leftWords = blockWords.filter(word => word.x0 < pageWidth * 0.72);
+    const rightWords = blockWords.filter(word => word.x0 >= pageWidth * 0.72);
+    const rightText = rightWords
+      .sort((a, b) => (a.cy - b.cy) || (a.x0 - b.x0))
+      .map(word => word.text)
+      .join(' ');
+
+    let name = '';
+    const nameWords = leftWords
+      .filter(word => word.cy <= codeLine.cy - 6)
+      .filter(word => !extractPriceFromLine(word.text))
+      .filter(word => !extractQtyFromLine(word.text))
+      .filter(word => !extractCardCodeFromLine(word.text))
+      .filter(word => !isIgnoredOcrLine(word.text))
+      .sort((a, b) => a.x0 - b.x0);
+    if (nameWords.length > 0) {
+      name = extractNameFromWords(nameWords);
+    }
+
+    let price = null;
+    price = extractPriceFromLine(rightText);
+    if (price === null) {
+      const priceCandidates = blockLines
+        .map(line => extractPriceFromLine(line.text))
+        .filter(value => value !== null);
+      if (priceCandidates.length > 0) price = priceCandidates[0];
+    }
+
+    let qty = null;
+    qty = extractQtyFromLine(rightText);
+    if (qty === null) {
+      const qtyCandidates = blockLines
+        .map(line => extractQtyFromLine(line.text))
+        .filter(value => value !== null);
+      if (qtyCandidates.length > 0) qty = qtyCandidates[qtyCandidates.length - 1];
+    }
+
+    if (!name) {
+      const fallback = blockLines
+        .map(line => extractNameFromWords(line.words))
+        .filter(Boolean)
+        .map(text => ({ text }))
+        .sort((a, b) => a.text.length - b.text.length)[0];
+      name = fallback ? fallback.text : '';
+    }
+
+    if (!name) {
+      const fallbackLine = blockLines
+        .filter(line => isLikelyNameLine(line.text))
+        .sort((a, b) => a.cy - b.cy)[0];
+      name = fallbackLine ? cleanupRecognizedName(fallbackLine.text) : '';
+    }
+
+    const cardCode = extractCardCodeFromLine(codeLine.text);
+    if (!name || !cardCode) return null;
+
+    const quantity = qty || 1;
+    const unitPrice = price === null ? null : price;
+    return {
+      name,
+      cardCode,
+      unitPrice,
+      qty: quantity,
+      cost: unitPrice === null ? 0 : round2(unitPrice * quantity),
+      status: '未售出',
+      source: '截图识别',
+      sells: [],
+      profit: null
+    };
+  }).filter(Boolean);
+
+  const seen = new Set();
+  return products.filter(item => {
+    const key = [item.name, item.cardCode, item.unitPrice, item.qty].join('|');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function parseProductsFromScreenshotText(rawText) {
@@ -1811,8 +1997,10 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
         }
       });
       const text = result?.data?.text || '';
+      const words = Array.isArray(result?.data?.words) ? result.data.words : [];
       setRawText(text);
-      const parsed = parseProductsFromScreenshotText(text);
+      const parsedFromWords = parseProductsFromOcrWords(words);
+      const parsed = parsedFromWords.length > 0 ? parsedFromWords : parseProductsFromScreenshotText(text);
       const enriched = await enrichRecognizedItemsWithImages(parsed);
       setDrafts(enriched);
       if (enriched.length === 0) {
