@@ -4,7 +4,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+const DEFAULT_AI_API_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_MODEL = "gpt-4.1-mini";
 
 function jsonResponse(body, status) {
@@ -130,12 +130,15 @@ function buildMessages(imageDataUrl) {
   ];
 }
 
-function buildRequestBody(model, imageDataUrl) {
-  return {
+function buildRequestBody(model, imageDataUrl, useJsonSchema) {
+  const body = {
     model: model || DEFAULT_MODEL,
     temperature: 0,
     messages: buildMessages(imageDataUrl),
-    response_format: {
+  };
+
+  if (useJsonSchema) {
+    body.response_format = {
       type: "json_schema",
       json_schema: {
         name: "card_screenshot_extract",
@@ -164,8 +167,10 @@ function buildRequestBody(model, imageDataUrl) {
           required: ["items"],
         },
       },
-    },
-  };
+    };
+  }
+
+  return body;
 }
 
 function extractAssistantText(data) {
@@ -189,14 +194,35 @@ function extractAssistantText(data) {
   return "";
 }
 
-async function callOpenAI(apiKey, model, imageDataUrl) {
-  const response = await fetch(OPENAI_API_URL, {
+function readProviderConfig(requestedModel) {
+  const apiUrl = (Deno.env.get("AI_API_URL") || Deno.env.get("OPENAI_API_URL") || DEFAULT_AI_API_URL).trim();
+  const apiKey = (Deno.env.get("AI_API_KEY") || Deno.env.get("OPENAI_API_KEY") || "").trim();
+  const model = String(requestedModel || Deno.env.get("AI_MODEL") || DEFAULT_MODEL).trim() || DEFAULT_MODEL;
+  const authHeader = (Deno.env.get("AI_AUTH_HEADER") || "Authorization").trim() || "Authorization";
+  const authScheme = (Deno.env.get("AI_AUTH_SCHEME") || "Bearer").trim();
+  const useJsonSchema = String(Deno.env.get("AI_USE_JSON_SCHEMA") || "true").trim().toLowerCase() !== "false";
+  return {
+    apiUrl,
+    apiKey,
+    model,
+    authHeader,
+    authScheme,
+    useJsonSchema,
+  };
+}
+
+async function callProvider(config, imageDataUrl) {
+  const headers = {
+    "Content-Type": "application/json",
+  };
+  headers[config.authHeader] = config.authScheme
+    ? config.authScheme + " " + config.apiKey
+    : config.apiKey;
+
+  const response = await fetch(config.apiUrl, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: "Bearer " + apiKey,
-    },
-    body: JSON.stringify(buildRequestBody(model, imageDataUrl)),
+    headers,
+    body: JSON.stringify(buildRequestBody(config.model, imageDataUrl, config.useJsonSchema)),
   });
 
   const data = await response.json();
@@ -204,7 +230,7 @@ async function callOpenAI(apiKey, model, imageDataUrl) {
     const message =
       data && data.error && data.error.message
         ? data.error.message
-        : "OpenAI 请求失败 (" + response.status + ")";
+        : "AI 提供方请求失败 (" + response.status + ")";
     throw new Error(message);
   }
   return data;
@@ -219,15 +245,17 @@ Deno.serve(async function(req) {
     return errorResponse("只支持 POST 请求", 405);
   }
 
-  const apiKey = Deno.env.get("OPENAI_API_KEY") || "";
-  if (!apiKey) {
-    return errorResponse("Supabase Edge Function 未配置 OPENAI_API_KEY", 500);
-  }
-
   try {
     const body = await req.json();
     const imageDataUrl = String((body && body.imageDataUrl) || "").trim();
-    const model = String((body && body.model) || "").trim() || DEFAULT_MODEL;
+    const providerConfig = readProviderConfig(body && body.model);
+
+    if (!providerConfig.apiKey) {
+      return errorResponse("Supabase Edge Function 未配置 AI_API_KEY 或 OPENAI_API_KEY", 500);
+    }
+    if (!providerConfig.apiUrl) {
+      return errorResponse("Supabase Edge Function 未配置 AI_API_URL", 500);
+    }
 
     if (!imageDataUrl) {
       return errorResponse("缺少 imageDataUrl", 400);
@@ -236,7 +264,7 @@ Deno.serve(async function(req) {
       return errorResponse("目前仅支持 data URL 图片输入", 400);
     }
 
-    const data = await callOpenAI(apiKey, model, imageDataUrl);
+    const data = await callProvider(providerConfig, imageDataUrl);
     const assistantText = extractAssistantText(data);
     if (!assistantText) {
       return errorResponse("AI 没有返回可解析内容", 502, { raw: data });
@@ -254,7 +282,8 @@ Deno.serve(async function(req) {
 
     return jsonResponse({
       items,
-      model,
+      model: providerConfig.model,
+      apiUrl: providerConfig.apiUrl,
       rawText: assistantText,
     });
   } catch (error) {
