@@ -3272,6 +3272,13 @@ function App({ onLock }) {
     return sum + (i.sells || []).reduce((s, v) => s + (v.total || 0), 0);
   }, 0);
   const totalSoldCost = items.filter(i => i.status === '已售出' || i.status === '待签收').reduce((sum, i) => sum + (i.cost || 0), 0);
+  const remainingInventoryValue = round2(items.reduce((sum, i) => {
+    const qty = i.qty || 0;
+    const soldQty = (i.sells || []).reduce((s, v) => s + (v.qty || 0), 0);
+    const remainingQty = Math.max(0, qty - soldQty);
+    const unitPrice = i.unitPrice === null || i.unitPrice === undefined ? 0 : i.unitPrice;
+    return sum + (remainingQty * unitPrice);
+  }, 0));
   const totalEarned = totalSoldValue + totalPendingValue;
   const toBreakEven = totalCost - totalEarned;
   const totalProfit = items.reduce((sum, i) => {
@@ -3414,6 +3421,10 @@ function App({ onLock }) {
           <div className="stat-label">已售成本</div>
           <div className="stat-value">{formatMoney(totalSoldCost)}</div>
           <div className="stat-sub">已售+待签收</div>
+          <div style={{marginTop:10,paddingTop:10,borderTop:'1px solid rgba(255,255,255,0.06)'}}>
+            <div style={{fontSize:11,color:'#8b949e',marginBottom:2}}>剩余商品总价</div>
+            <div style={{fontSize:18,fontWeight:700,color:'#58a6ff'}}>{formatMoney(remainingInventoryValue)}</div>
+          </div>
         </div>
         <div className="stat-card red">
           <div className="stat-label">待签收金额</div>
