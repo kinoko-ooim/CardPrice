@@ -9,6 +9,7 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
@@ -1027,6 +1028,188 @@ function formatDateTime(value) {
   }
 }
 
+function normalizeOcrLine(line) {
+  return String(line || '')
+    .replace(/[：]/g, ':')
+    .replace(/[（]/g, '(')
+    .replace(/[）]/g, ')')
+    .replace(/[—–]/g, '-')
+    .replace(/[×✕]/g, 'x')
+    .replace(/[￥]/g, '¥')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractCardCodeFromLine(line) {
+  if (!line) return '';
+  const compact = normalizeOcrLine(line).replace(/\s+/g, '').toUpperCase();
+  const match = compact.match(/([A-Z0-9.]+-\d{2,3}(?:\/[A-Z0-9.]+)?)/);
+  if (!match) return '';
+  return match[1].replace(/\/(\d{2,3})(SR|SAR|AR|CHR|CSR|RRR|RR|UR)$/i, '/$1');
+}
+
+function extractPriceFromLine(line) {
+  if (!line) return null;
+  const normalized = normalizeOcrLine(line).replace(/[,，]/g, '');
+  let match = normalized.match(/[¥]\s*([0-9]+(?:\.[0-9]+)?)/);
+  if (match) return parseFloat(match[1]);
+  if (/^[0-9]+(?:\.[0-9]+)?$/.test(normalized) && normalized.length <= 6) {
+    return parseFloat(normalized);
+  }
+  return null;
+}
+
+function extractQtyFromLine(line) {
+  if (!line) return null;
+  const compact = normalizeOcrLine(line).replace(/\s+/g, '').toLowerCase();
+  const match = compact.match(/x(\d{1,3})/);
+  if (match) return parseInt(match[1], 10);
+  return null;
+}
+
+function isIgnoredOcrLine(line) {
+  if (!line) return true;
+  const normalized = normalizeOcrLine(line);
+  if (!normalized) return true;
+  if (/^评级卡编号[:：]/.test(normalized)) return true;
+  if (/^psa\s*\d+/i.test(normalized)) return true;
+  if (/^(流通品相|无标记|查看原图|宝可梦|简|日|英|中)$/i.test(normalized)) return true;
+  if (/^(sr|sar|ar|chr|csr|rr|rrr|ur)$/i.test(normalized)) return true;
+  return false;
+}
+
+function isLikelyNameLine(line) {
+  const normalized = normalizeOcrLine(line);
+  if (!normalized || isIgnoredOcrLine(normalized)) return false;
+  if (extractCardCodeFromLine(normalized)) return false;
+  if (extractPriceFromLine(normalized) !== null) return false;
+  if (extractQtyFromLine(normalized) !== null) return false;
+  return /[\u4e00-\u9fffA-Za-z]/.test(normalized);
+}
+
+function cleanupRecognizedName(line) {
+  return normalizeOcrLine(line)
+    .replace(/\b(?:SR|SAR|AR|CHR|CSR|RRR|RR|UR)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function parseProductsFromScreenshotText(rawText) {
+  const lines = String(rawText || '')
+    .split(/\n+/)
+    .map(normalizeOcrLine)
+    .filter(Boolean);
+
+  const codeIndexes = [];
+  lines.forEach((line, index) => {
+    if (extractCardCodeFromLine(line)) codeIndexes.push(index);
+  });
+
+  const products = [];
+
+  function buildProductFromBlock(codeIdx, blockStart, blockEnd) {
+    const code = extractCardCodeFromLine(lines[codeIdx]);
+    if (!code) return null;
+
+    let name = '';
+    for (let i = codeIdx - 1; i >= blockStart; i -= 1) {
+      if (isLikelyNameLine(lines[i])) {
+        name = cleanupRecognizedName(lines[i]);
+        break;
+      }
+    }
+
+    let price = null;
+    let qty = null;
+    for (let i = codeIdx; i < blockEnd; i += 1) {
+      if (price === null) price = extractPriceFromLine(lines[i]);
+      if (qty === null) qty = extractQtyFromLine(lines[i]);
+    }
+
+    if (!name) {
+      return null;
+    }
+
+    const unitPrice = price === null ? null : price;
+    const quantity = qty || 1;
+    const cost = unitPrice === null ? 0 : round2(unitPrice * quantity);
+
+    return {
+      name,
+      cardCode: code,
+      unitPrice,
+      qty: quantity,
+      cost,
+      status: '未售出',
+      source: '截图识别',
+      sells: [],
+      profit: null
+    };
+  }
+
+  if (codeIndexes.length > 0) {
+    codeIndexes.forEach((codeIdx, position) => {
+      const blockStart = position === 0 ? 0 : codeIndexes[position - 1] + 1;
+      const blockEnd = position === codeIndexes.length - 1 ? lines.length : codeIndexes[position + 1];
+      const product = buildProductFromBlock(codeIdx, blockStart, blockEnd);
+      if (product) products.push(product);
+    });
+  } else {
+    lines.forEach((line, index) => {
+      const price = extractPriceFromLine(line);
+      if (price === null) return;
+      let name = '';
+      for (let i = index - 1; i >= 0; i -= 1) {
+        if (isLikelyNameLine(lines[i])) {
+          name = cleanupRecognizedName(lines[i]);
+          break;
+        }
+      }
+      if (!name) return;
+      const qty = extractQtyFromLine(lines[index + 1] || '') || 1;
+      products.push({
+        name,
+        cardCode: '',
+        unitPrice: price,
+        qty,
+        cost: round2(price * qty),
+        status: '未售出',
+        source: '截图识别',
+        sells: [],
+        profit: null
+      });
+    });
+  }
+
+  const seen = new Set();
+  return products.filter(item => {
+    const key = [item.name, item.cardCode, item.unitPrice, item.qty].join('|');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+async function enrichRecognizedItemsWithImages(items) {
+  const tasks = (items || []).map(async item => {
+    if (!item.cardCode) return item;
+    try {
+      const result = await lookupCardImageViaEdgeFunction(item.cardCode);
+      return {
+        ...item,
+        imageUrl: result.imageUrl || item.imageUrl || null
+      };
+    } catch (_error) {
+      const fallbackUrl = buildTcgMikImageUrl(item.cardCode);
+      return {
+        ...item,
+        imageUrl: fallbackUrl || item.imageUrl || null
+      };
+    }
+  });
+  return Promise.all(tasks);
+}
+
 
 
 // ── Components ─────────────────────────────────────────────────────────────────
@@ -1558,6 +1741,199 @@ function EditModal({ item, onSave, onClose, onToast }) {
         <div className="modal-footer">
           <button className="btn btn-secondary" onClick={onClose}>取消</button>
           <button className="btn btn-primary" onClick={handleSave}>保存</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ScreenshotImportModal({ onImport, onClose, showToast }) {
+  const [file, setFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [progressText, setProgressText] = useState('');
+  const [rawText, setRawText] = useState('');
+  const [drafts, setDrafts] = useState([]);
+
+  function updateDraft(index, field, value) {
+    setDrafts(prev => prev.map((item, idx) => {
+      if (idx !== index) return item;
+      const next = { ...item, [field]: value };
+      const unitPrice = field === 'unitPrice' ? (value === '' ? null : parseFloat(value)) : item.unitPrice;
+      const qty = field === 'qty' ? (value === '' ? 1 : parseInt(value, 10) || 1) : item.qty;
+      next.unitPrice = unitPrice;
+      next.qty = qty;
+      next.cost = unitPrice === null ? 0 : round2(unitPrice * qty);
+      return next;
+    }));
+  }
+
+  function removeDraft(index) {
+    setDrafts(prev => prev.filter((_, idx) => idx !== index));
+  }
+
+  function handleFileChange(selectedFile) {
+    if (!selectedFile) return;
+    setFile(selectedFile);
+    setRawText('');
+    setDrafts([]);
+    const reader = new FileReader();
+    reader.onload = ev => setPreviewUrl(String(ev.target?.result || ''));
+    reader.readAsDataURL(selectedFile);
+  }
+
+  async function handleRecognize() {
+    if (!file) {
+      showToast('请先上传截图');
+      return;
+    }
+    if (!window.Tesseract) {
+      showToast('OCR 组件加载失败，请刷新后重试');
+      return;
+    }
+
+    setLoading(true);
+    setProgressText('正在识别文字...');
+    setRawText('');
+    setDrafts([]);
+
+    try {
+      const result = await window.Tesseract.recognize(file, 'chi_sim+eng', {
+        logger(message) {
+          if (message?.status === 'recognizing text') {
+            const pct = message.progress ? Math.round(message.progress * 100) : 0;
+            setProgressText(`正在识别文字... ${pct}%`);
+          } else if (message?.status) {
+            setProgressText(String(message.status));
+          }
+        }
+      });
+      const text = result?.data?.text || '';
+      setRawText(text);
+      const parsed = parseProductsFromScreenshotText(text);
+      const enriched = await enrichRecognizedItemsWithImages(parsed);
+      setDrafts(enriched);
+      if (enriched.length === 0) {
+        showToast('没有识别出可导入的商品，请检查截图是否清晰');
+      } else {
+        showToast(`已识别 ${enriched.length} 条商品，请确认后导入`);
+      }
+    } catch (error) {
+      console.error('截图识别失败', error);
+      showToast(error?.message || '截图识别失败');
+    } finally {
+      setLoading(false);
+      setProgressText('');
+    }
+  }
+
+  function handleImport() {
+    const normalized = drafts
+      .map(item => ({
+        ...item,
+        name: String(item.name || '').trim(),
+        cardCode: String(item.cardCode || '').trim(),
+        unitPrice: item.unitPrice === '' ? null : item.unitPrice,
+        qty: parseInt(item.qty, 10) || 1,
+        cost: item.unitPrice === null || item.unitPrice === '' ? 0 : round2((parseFloat(item.unitPrice) || 0) * (parseInt(item.qty, 10) || 1)),
+        status: item.status || '未售出',
+        source: item.source || '截图识别',
+        sells: [],
+        profit: null
+      }))
+      .filter(item => item.name);
+
+    if (normalized.length === 0) {
+      showToast('请至少保留一条有效商品');
+      return;
+    }
+    onImport(normalized);
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{maxWidth: 860}}>
+        <div className="modal-header">
+          <div className="modal-title">🧠 截图识别新增</div>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        <div className="modal-body">
+          <div className="modal-section-title">上传截图</div>
+          <div style={{display:'flex', gap:16, alignItems:'flex-start', flexWrap:'wrap'}}>
+            <label style={{minWidth:180, minHeight:180, border:'1px dashed var(--border-bright)', borderRadius:12, background:'rgba(88,166,255,0.05)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', overflow:'hidden'}}>
+              {previewUrl ? (
+                <img src={previewUrl} alt="截图预览" style={{width:'100%', height:'100%', objectFit:'contain', background:'#111827'}} />
+              ) : (
+                <div style={{textAlign:'center', color:'var(--text-2)', padding:16}}>
+                  <div style={{fontSize:32, marginBottom:8}}>🖼️</div>
+                  <div>点击上传截图</div>
+                </div>
+              )}
+              <input type="file" accept="image/*" style={{display:'none'}} onChange={e => handleFileChange(e.target.files?.[0])} />
+            </label>
+            <div style={{flex:'1 1 320px', minWidth:260}}>
+              <div style={{fontSize:13, color:'var(--text-2)', lineHeight:1.7, marginBottom:12}}>
+                支持识别截图里的卡名、编号、价格和数量。第一版建议上传清晰、完整、背景干净的商品列表截图。
+              </div>
+              <div style={{display:'flex', gap:10, flexWrap:'wrap'}}>
+                <button className="btn btn-primary" onClick={handleRecognize} disabled={!file || loading}>
+                  {loading ? '识别中...' : '开始识别'}
+                </button>
+                <label className="btn btn-secondary" style={{cursor:'pointer'}}>
+                  重新选图
+                  <input type="file" accept="image/*" style={{display:'none'}} onChange={e => handleFileChange(e.target.files?.[0])} />
+                </label>
+              </div>
+              {progressText && (
+                <div style={{marginTop:10, fontSize:12, color:'#60a5fa'}}>{progressText}</div>
+              )}
+            </div>
+          </div>
+
+          {drafts.length > 0 && (
+            <>
+              <div className="modal-section-title" style={{marginTop:20}}>识别结果确认</div>
+              <div style={{display:'flex', flexDirection:'column', gap:12}}>
+                {drafts.map((item, index) => (
+                  <div key={`${item.cardCode || item.name}-${index}`} style={{border:'1px solid var(--border)', borderRadius:12, padding:14, background:'rgba(13,17,23,0.55)'}}>
+                    <div style={{display:'grid', gridTemplateColumns:'72px 1.4fr 1fr 0.8fr 0.7fr auto', gap:10, alignItems:'center'}}>
+                      <div style={{width:72, height:72, borderRadius:10, border:'1px solid var(--border)', background:'#1c2a45', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden'}}>
+                        {item.imageUrl ? (
+                          <img src={item.imageUrl} alt={item.name} style={{width:'100%', height:'100%', objectFit:'contain'}} />
+                        ) : (
+                          <span style={{fontSize:26}}>🃏</span>
+                        )}
+                      </div>
+                      <input className="form-input" value={item.name} onChange={e => updateDraft(index, 'name', e.target.value)} placeholder="卡牌名称" />
+                      <input className="form-input" value={item.cardCode || ''} onChange={e => updateDraft(index, 'cardCode', e.target.value)} placeholder="卡牌编号" />
+                      <input className="form-input" type="number" step="0.01" value={item.unitPrice ?? ''} onChange={e => updateDraft(index, 'unitPrice', e.target.value)} placeholder="单价" />
+                      <input className="form-input" type="number" min="1" value={item.qty ?? 1} onChange={e => updateDraft(index, 'qty', e.target.value)} placeholder="数量" />
+                      <button className="btn btn-secondary" onClick={() => removeDraft(index)} style={{color:'#f87171', borderColor:'rgba(248,81,73,0.3)'}}>删除</button>
+                    </div>
+                    <div style={{marginTop:8, fontSize:12, color:'var(--text-2)'}}>
+                      成本会按 单价 × 数量 自动生成，导入后状态默认设为“未售出”。
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {rawText && (
+            <>
+              <div className="modal-section-title" style={{marginTop:20}}>OCR 原始文本</div>
+              <textarea
+                className="form-input"
+                style={{minHeight:140, resize:'vertical', fontFamily:'var(--mono, monospace)'}}
+                value={rawText}
+                onChange={e => setRawText(e.target.value)}
+              />
+            </>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={onClose}>取消</button>
+          <button className="btn btn-primary" onClick={handleImport} disabled={drafts.length === 0}>导入 {drafts.length || ''} 条记录</button>
         </div>
       </div>
     </div>
@@ -2296,6 +2672,7 @@ function App({ onLock }) {
   const [sortDir, setSortDir] = useState('desc');
   const [editingItem, setEditingItem] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [showScreenshotImport, setShowScreenshotImport] = useState(false);
   const [batchImage, setBatchImage] = useState(false);
   const [toast, setToast] = useState(null);
   const [page, setPage] = useState(1);
@@ -2534,6 +2911,19 @@ function App({ onLock }) {
     setItems(prev => [item, ...prev]);
     setShowAdd(false);
     showToast('添加成功 ✓');
+  }
+
+  function handleImportRecognized(recognizedItems) {
+    setItems(prev => {
+      const startId = generateId(prev);
+      const nextItems = recognizedItems.map((item, index) => ({
+        ...item,
+        id: startId + index
+      }));
+      return [...nextItems.reverse(), ...prev];
+    });
+    setShowScreenshotImport(false);
+    showToast(`已导入 ${recognizedItems.length} 条截图识别记录 ✓`);
   }
 
   function handleDelete(id) {
@@ -2808,9 +3198,11 @@ function App({ onLock }) {
       {!showAdd && (
         <div className="add-form-toggle" style={{display:'flex', gap:12, flexWrap:'wrap'}}>
           <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ 添加新卡牌</button>
+          <button className="btn" style={{background:'rgba(240,192,0,0.14)',color:'#f0c000',border:'1px solid rgba(240,192,0,0.28)'}} onClick={() => setShowScreenshotImport(true)}>🧠 截图识别新增</button>
           <button className="btn" style={{background:'rgba(34,197,94,0.15)',color:'#22c55e',border:'1px solid rgba(34,197,94,0.3)'}} onClick={() => setBatchImage(true)}>🖼️ 批量添加图片</button>
         </div>
       )}
+      {showScreenshotImport && <ScreenshotImportModal onImport={handleImportRecognized} onClose={() => setShowScreenshotImport(false)} showToast={showToast} />}
       {batchImage && <BatchImageModal items={items} onUpdate={setItems} onClose={() => setBatchImage(false)} showToast={showToast} />}
 
       {/* Table */}
