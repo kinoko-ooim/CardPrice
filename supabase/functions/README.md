@@ -27,7 +27,7 @@
    或者
    `AI_API_KEY=第三方平台 Key`
 5. 如果是第三方 OpenAI 兼容平台，再额外加：
-   `AI_API_URL=该平台的 chat completions 接口地址`
+   `AI_API_URL=该平台的基地址或 chat completions 接口地址`
    `AI_MODEL=你要调用的模型名`
 6. 如果第三方平台不支持 `json_schema` 结构化输出，再额外加：
    `AI_USE_JSON_SCHEMA=false`

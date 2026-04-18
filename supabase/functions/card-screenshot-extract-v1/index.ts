@@ -211,6 +211,17 @@ function readProviderConfig(requestedModel) {
   };
 }
 
+function normalizeApiUrl(apiUrl) {
+  const raw = String(apiUrl || "").trim().replace(/\/+$/, "");
+  if (!raw) {
+    return raw;
+  }
+  if (/\/chat\/completions$/i.test(raw) || /\/responses$/i.test(raw)) {
+    return raw;
+  }
+  return raw + "/chat/completions";
+}
+
 async function callProvider(config, imageDataUrl) {
   const headers = {
     "Content-Type": "application/json",
@@ -219,7 +230,7 @@ async function callProvider(config, imageDataUrl) {
     ? config.authScheme + " " + config.apiKey
     : config.apiKey;
 
-  const response = await fetch(config.apiUrl, {
+  const response = await fetch(normalizeApiUrl(config.apiUrl), {
     method: "POST",
     headers,
     body: JSON.stringify(buildRequestBody(config.model, imageDataUrl, config.useJsonSchema)),
