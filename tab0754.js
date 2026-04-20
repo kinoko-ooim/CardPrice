@@ -215,9 +215,9 @@ function Tab0754() {
   );
 
   // 录入区
-  var inputArea = C('div', S('style', {background:'var(--surface-2)',borderRadius:16,
-    border:'1px solid var(--border)',padding:'16px 20px',display:'flex',gap:10,
-    alignItems:'center',marginBottom:24}),
+  var inputArea = C('div', S('style', {background:'var(--surface-solid)',borderRadius:20,
+    border:'1px solid var(--border)',padding:'20px 22px',display:'flex',gap:12,
+    alignItems:'center',marginBottom:28, boxShadow:'0 18px 40px rgba(0,0,0,0.22)'}),
     C('span', S('style', {fontSize:13,fontWeight:600,whiteSpace:'nowrap',color:'var(--text-2)'}), '+ \u65B0\u589E'),
     C('input', P({className:'form-input',type:'number',step:'0.01',value:inputAmount,
       onChange:function(e){setInputAmount(e.target.value)},placeholder:'\u91D1\u989D',
@@ -271,8 +271,9 @@ function Tab0754() {
   }
 
   var dateFilter = C('div', S('style', {
-    background:'var(--surface-2)', borderRadius:16, border:dateFilterBorder,
-    padding:'12px 20px', display:'flex', gap:16, alignItems:'center', marginBottom:24, flexWrap:'wrap'}),
+    background:'var(--surface-solid)', borderRadius:20, border:dateFilterBorder,
+    padding:'16px 22px', display:'flex', gap:16, alignItems:'center', marginBottom:28, flexWrap:'wrap',
+    boxShadow:'0 18px 40px rgba(0,0,0,0.22)'}),
     C('span', S('style', {fontSize:13,fontWeight:600,whiteSpace:'nowrap',color:'var(--text-2)'}), ' \u7B5F\u9009\u65E5\u671F'),
     C('span', S('style', {fontSize:11,color:'var(--text-3)'}), '\u4ECE'),
     C('input', P({type:'date', value:dateFrom, onChange:function(e){setDateFrom(e.target.value)}},
@@ -344,8 +345,8 @@ function Tab0754() {
     );
   }
 
-  var tableArea = C('div', S('style', {background:'var(--surface-2)',borderRadius:16,
-    border:'1px solid var(--border)',overflow:'hidden'}),
+  var tableArea = C('div', S('style', {background:'var(--surface-solid)',borderRadius:20,
+    border:'1px solid var(--border)',overflow:'hidden', boxShadow:'0 18px 40px rgba(0,0,0,0.24)'}),
     C('div', S('style', {padding:'14px 20px',background:'var(--surface-3)',
       borderBottom:'1px solid var(--border)',fontSize:12,fontWeight:600,color:'var(--text-2)'}), '\u552E\u51FA\u660E\u7EC6'),
     tableContent
