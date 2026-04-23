@@ -2565,6 +2565,7 @@ function OldCardInventoryTab({ showToast }) {
   const [sortDir, setSortDir] = useState('desc');
   const [editingItem, setEditingItem] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [showScreenshotImport, setShowScreenshotImport] = useState(false);
   const [batchImage, setBatchImage] = useState(false);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
@@ -2650,6 +2651,19 @@ function OldCardInventoryTab({ showToast }) {
     setItems(prev => [item, ...prev]);
     setShowAdd(false);
     showToast('老卡记录已添加 ✓');
+  }
+
+  function handleImportRecognized(recognizedItems) {
+    setItems(prev => {
+      const startId = generateId(prev);
+      const nextItems = recognizedItems.map((item, index) => ({
+        ...item,
+        id: startId + index
+      }));
+      return [...nextItems.reverse(), ...prev];
+    });
+    setShowScreenshotImport(false);
+    showToast(`已导入 ${recognizedItems.length} 条老卡截图识别记录 ✓`);
   }
 
   function handleDelete(id) {
@@ -2849,9 +2863,11 @@ function OldCardInventoryTab({ showToast }) {
         {!showAdd && (
           <div className="add-form-toggle" style={{display:'flex', gap:12, flexWrap:'wrap'}}>
             <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ 添加老卡记录</button>
+            <button className="btn btn-gold-soft" onClick={() => setShowScreenshotImport(true)}>🧠 截图识别新增</button>
             <button className="btn btn-green-soft" onClick={() => setBatchImage(true)}>🖼️ 批量添加图片</button>
           </div>
         )}
+        {showScreenshotImport && <ScreenshotImportModal onImport={handleImportRecognized} onClose={() => setShowScreenshotImport(false)} showToast={showToast} />}
         {batchImage && <BatchImageModal items={items} onUpdate={setItems} onClose={() => setBatchImage(false)} showToast={showToast} />}
 
         <div className="table-container">
