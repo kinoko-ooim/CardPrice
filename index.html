@@ -662,7 +662,13 @@ const DATA_URL_PREFIX = 'data:';
 const ACCESS_SESSION_KEY = 'kajia_access_granted';
 const ACCESS_PASSWORD_HASH = '1549c7def3809f8916e748ac0b005fb002f912cd03a60bbd7919e40de0576c5f';
 const SUPABASE_IMAGE_LOOKUP_FUNCTION = 'card-image-lookup-v2';
+const SUPABASE_IMAGE_LOOKUP_FUNCTION_LEGACY = 'card-image-lookup';
 const SUPABASE_SCREENSHOT_AI_FUNCTION = 'card-screenshot-extract-v1';
+const TCGCOLLECTOR_R_JINA_PREFIX = 'https://r.jina.ai/http://';
+const TCGCOLLECTOR_SETS_URL = 'https://www.tcgcollector.com/sets/jp?cardCountMode=anyCardVariant&releaseDateOrder=newToOld&displayAs=images';
+const TCGCOLLECTOR_SEARCH_URL = 'https://www.tcgcollector.com/cards/jp?cardSource=inCardVariant&releaseDateOrder=newToOld&displayAs=images&cardSearch={query}';
+const OLD_CARD_CLOUD_SCOPE = 'old-cards';
+const SOLD_0754_CLOUD_SCOPE = '0754-sold';
 const SUPABASE_DEFAULT_CONFIG = {
   url: 'https://hnnzyrslsmpankpkhjho.supabase.co',
   anonKey: 'sb_publishable_-rtge5LdKWSnkwKUFWc-aQ_gu3Q8vj0',
@@ -879,6 +885,14 @@ function normalizeSupabaseConfig(raw) {
     bucket: String(config.bucket || SUPABASE_DEFAULT_CONFIG.bucket).trim() || SUPABASE_DEFAULT_CONFIG.bucket
   };
 }
+function buildScopedSupabaseConfig(config, scopeSuffix) {
+  const normalized = normalizeSupabaseConfig(config);
+  if (!scopeSuffix) return normalized;
+  return {
+    ...normalized,
+    rowId: `${normalized.rowId}__${scopeSuffix}`
+  };
+}
 function readSupabaseConfig() {
   try {
     const saved = localStorage.getItem(SUPABASE_CONFIG_KEY);
@@ -911,29 +925,163 @@ function createSupabaseBrowserClient(config) {
     }
   });
 }
+function buildTcgCollectorProxyUrl(url) {
+  return `${TCGCOLLECTOR_R_JINA_PREFIX}${url}`;
+}
+async function fetchTcgCollectorProxyText(url) {
+  const response = await fetch(buildTcgCollectorProxyUrl(url));
+  if (!response.ok) {
+    throw new Error(`TCG Collector 代理请求失败 (${response.status})`);
+  }
+  return await response.text();
+}
+function parseCardCodeForLookup(rawCode) {
+  const cleaned = String(rawCode || '').trim().replace(/\s+/g, '').replace(/[–—_]/g, '-');
+  let match = cleaned.match(/^(.+)-(\d{1,3})(?:\/([A-Za-z0-9.-]+))?$/);
+  if (!match) {
+    match = cleaned.match(/^([A-Za-z0-9.-]+?)(\d{2,3})(?:\/([A-Za-z0-9.-]+))?$/);
+  }
+  if (!match) {
+    throw new Error('编号格式无法识别');
+  }
+  const setCode = match[1];
+  const cardNum = String(match[2]).padStart(3, '0');
+  const denominator = match[3] || '';
+  const cardNumber = denominator ? `${cardNum}/${denominator}` : cardNum;
+  return {
+    raw: rawCode,
+    setCode,
+    cardNum,
+    denominator,
+    cardNumber,
+    canonical: `${setCode}-${cardNumber}`
+  };
+}
+function normalizeCollectorToken(value) {
+  return String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '')
+    .replace(/[–—_]/g, '-');
+}
+function getExpectedCollectorNumbers(code) {
+  const values = new Set();
+  values.add(normalizeCollectorToken(code.cardNumber));
+  if (!code.denominator) {
+    values.add(normalizeCollectorToken(`${code.cardNum}/${code.setCode}`));
+  }
+  return values;
+}
+let tcgCollectorSetCodeMapPromise = null;
+async function loadTcgCollectorSetCodeMap() {
+  if (!tcgCollectorSetCodeMapPromise) {
+    tcgCollectorSetCodeMapPromise = (async () => {
+      const markdown = await fetchTcgCollectorProxyText(TCGCOLLECTOR_SETS_URL);
+      const mapping = {};
+      const lines = markdown.split('\n');
+      for (const rawLine of lines) {
+        const line = String(rawLine || '').trim();
+        const marker = '](https://www.tcgcollector.com/sets/';
+        const linkIndex = line.indexOf(marker);
+        if (linkIndex < 0) continue;
+        const idStart = linkIndex + marker.length;
+        const firstIdChar = line.charAt(idStart);
+        if (firstIdChar < '0' || firstIdChar > '9') continue;
+        const nameStart = line.lastIndexOf('[', linkIndex);
+        if (nameStart < 0) continue;
+        const closeIndex = line.indexOf(')', idStart);
+        if (closeIndex < 0) continue;
+        const name = line.slice(nameStart + 1, linkIndex).trim();
+        const suffix = line.slice(closeIndex + 1).trim();
+        const code = suffix.split(/\s+/)[0] || '';
+        if (name && code && !mapping[code]) {
+          mapping[code] = name;
+        }
+      }
+      return mapping;
+    })();
+  }
+  return await tcgCollectorSetCodeMapPromise;
+}
+async function searchCardImageViaTcgCollector(cardCode) {
+  const code = parseCardCodeForLookup(cardCode);
+  const setNameMap = await loadTcgCollectorSetCodeMap();
+  const preferredSetName = setNameMap[code.setCode] || '';
+  const queries = code.denominator
+    ? [code.cardNumber, `${code.setCode} ${code.cardNum}`]
+    : [`${code.cardNum} ${code.setCode}`, `${code.setCode} ${code.cardNum}`, `${code.cardNum}/${code.setCode}`];
+  const expectedNumbers = getExpectedCollectorNumbers(code);
+  let lastError = null;
+
+  for (const rawQuery of queries) {
+    const query = encodeURIComponent(String(rawQuery || '').trim());
+    if (!query) continue;
+    try {
+      const markdown = await fetchTcgCollectorProxyText(TCGCOLLECTOR_SEARCH_URL.replace('{query}', query));
+      const entryPattern = /\[\!\[Image \d+: ([^\]]+)\]\((https:\/\/static\.tcgcollector\.com\/content\/images\/[^\)]+)\)\s+!\[Image \d+: ([^\]]+)\]\([^\)]*\)\s+([A-Za-z0-9.-]+(?:\/[A-Za-z0-9.-]+)+).*?\]\((https:\/\/www\.tcgcollector\.com\/cards\/\d+\/[^ \)]+)/gs;
+      const matches = [];
+      let match = null;
+      while ((match = entryPattern.exec(markdown)) !== null) {
+        const printedNumber = String(match[4] || '').trim();
+        if (!expectedNumbers.has(normalizeCollectorToken(printedNumber))) continue;
+        matches.push({
+          code: code.canonical,
+          source: 'tcgcollector',
+          title: String(match[1] || '').trim(),
+          imageUrl: String(match[2] || '').trim(),
+          pageUrl: String(match[5] || '').trim(),
+          setName: String(match[3] || '').trim(),
+          printedNumber
+        });
+      }
+      if (matches.length === 0) {
+        throw new Error(`没有在 TCG Collector 中找到 ${code.canonical}`);
+      }
+      if (preferredSetName) {
+        const exact = matches.find(item => item.setName === preferredSetName);
+        if (exact) return exact;
+      }
+      if (matches.length === 1) return matches[0];
+      return matches[0];
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error('TCG Collector 查图失败');
+}
 async function lookupCardImageViaEdgeFunction(cardCode) {
   const config = readSupabaseConfig();
   if (!hasSupabaseCredentials(config)) {
-    throw new Error('云端未配置，暂时无法使用云函数查图');
+    return await searchCardImageViaTcgCollector(cardCode);
   }
   const client = createSupabaseBrowserClient(config);
-  const { data, error } = await client.functions.invoke(SUPABASE_IMAGE_LOOKUP_FUNCTION, {
-    body: { code: cardCode }
-  });
-  if (error) {
-    throw new Error(error.message || '云函数查图失败');
+  let lastError = null;
+  for (const functionName of [SUPABASE_IMAGE_LOOKUP_FUNCTION, SUPABASE_IMAGE_LOOKUP_FUNCTION_LEGACY]) {
+    const { data, error } = await client.functions.invoke(functionName, {
+      body: { code: cardCode }
+    });
+    if (error) {
+      lastError = error;
+      continue;
+    }
+    const imageUrl = data?.imageUrl || data?.image_url || '';
+    if (!imageUrl) {
+      lastError = new Error('云函数没有返回图片地址');
+      continue;
+    }
+    return {
+      source: data?.source || '',
+      title: data?.title || '',
+      imageUrl,
+      pageUrl: data?.pageUrl || data?.page_url || '',
+      setName: data?.setName || data?.set_name || ''
+    };
   }
-  const imageUrl = data?.imageUrl || data?.image_url || '';
-  if (!imageUrl) {
-    throw new Error('云函数没有返回图片地址');
+  try {
+    return await searchCardImageViaTcgCollector(cardCode);
+  } catch (collectorError) {
+    throw new Error(lastError?.message || collectorError?.message || '云函数查图失败');
   }
-  return {
-    source: data?.source || '',
-    title: data?.title || '',
-    imageUrl,
-    pageUrl: data?.pageUrl || data?.page_url || '',
-    setName: data?.setName || data?.set_name || ''
-  };
 }
 async function extractScreenshotItemsViaAi(imageDataUrl) {
   const config = readSupabaseConfig();
@@ -953,19 +1101,60 @@ async function extractScreenshotItemsViaAi(imageDataUrl) {
     model: data?.model || ''
   };
 }
-async function fetchItemsFromSupabase(client, config) {
+async function fetchPayloadFromSupabase(client, config) {
   const { data, error } = await client
     .from(config.table)
     .select('payload, updated_at')
     .eq('id', config.rowId)
     .maybeSingle();
   if (error) throw error;
-  if (!data) return { found: false, items: [], updatedAt: null };
+  if (!data) return { found: false, payload: [], updatedAt: null };
   return {
     found: true,
-    items: normalizeItems(data.payload),
+    payload: data.payload,
     updatedAt: data.updated_at || null
   };
+}
+async function fetchItemsFromSupabase(client, config) {
+  const result = await fetchPayloadFromSupabase(client, config);
+  return {
+    found: result.found,
+    items: normalizeItems(result.payload),
+    updatedAt: result.updatedAt
+  };
+}
+async function savePayloadToSupabase(client, config, payload) {
+  const now = new Date().toISOString();
+  const { error } = await client
+    .from(config.table)
+    .upsert(
+      {
+        id: config.rowId,
+        payload,
+        updated_at: now
+      },
+      { onConflict: 'id' }
+    );
+  if (error) throw error;
+  return { updatedAt: now };
+}
+function normalize0754Record(raw, index) {
+  if (!raw || typeof raw !== 'object') return null;
+  const amount = toNumber(raw.amount, NaN);
+  if (!Number.isFinite(amount)) return null;
+  const createdAt = String(raw.createdAt || '').trim() || new Date().toISOString();
+  const rawDate = String(raw.date || '').trim();
+  const fallbackDate = createdAt.slice(0, 10);
+  return {
+    id: Number.isFinite(raw.id) ? raw.id : (Date.now() + index),
+    date: /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : fallbackDate,
+    amount: round2(amount),
+    createdAt
+  };
+}
+function normalize0754Records(data) {
+  if (!Array.isArray(data)) return [];
+  return data.map((item, index) => normalize0754Record(item, index)).filter(Boolean);
 }
 function getFileExtensionFromMimeType(mimeType) {
   if (!mimeType) return 'png';
@@ -984,10 +1173,20 @@ function slugifyPathPart(value, fallback) {
 }
 function buildTcgMikImageUrl(cardCode) {
   if (!cardCode) return null;
-  const match = String(cardCode).trim().match(/^([A-Za-z0-9.]+)[C]?-(\d+)$/);
+  let cleaned = String(cardCode)
+    .trim()
+    .replace(/[–—_]/g, '-')
+    .replace(/\s*\/\d+\s*$/, '')
+    .replace(/\s+/g, '');
+
+  let match = cleaned.match(/^(.+)-(\d{1,3})$/);
+  if (!match) {
+    match = cleaned.match(/^([A-Za-z][A-Za-z0-9.]*)(\d{2,3})$/);
+  }
   if (!match) return null;
+
   const setCode = match[1];
-  const cardNum = match[2].padStart(3, '0');
+  const cardNum = String(match[2]).padStart(3, '0');
   return `https://tcg.mik.moe/static/img/${setCode}/${cardNum}.png`;
 }
 function preloadImageUrl(url) {
@@ -1074,20 +1273,9 @@ async function uploadEmbeddedImagesToSupabaseStorage(client, config, items) {
 }
 async function saveItemsToSupabase(client, config, items) {
   const uploaded = await uploadEmbeddedImagesToSupabaseStorage(client, config, items);
-  const now = new Date().toISOString();
-  const { error } = await client
-    .from(config.table)
-    .upsert(
-      {
-        id: config.rowId,
-        payload: uploaded.items,
-        updated_at: now
-      },
-      { onConflict: 'id' }
-    );
-  if (error) throw error;
+  const result = await savePayloadToSupabase(client, config, uploaded.items);
   return {
-    updatedAt: now,
+    updatedAt: result.updatedAt,
     items: uploaded.items,
     uploadedCount: uploaded.uploadedCount,
     failedCount: uploaded.failedCount,
@@ -1609,7 +1797,7 @@ function CloudConfigModal({
             <div style={{fontSize:13, color:'var(--text-2)', lineHeight:1.7}}>
               <div>1. 在 Supabase 新建项目后，先运行仓库里的 <code>supabase_setup.sql</code>，它会同时创建数据表和图片存储桶。</div>
               <div>2. 到 Project Settings → API，复制 Project URL 和 anon public key。</div>
-              <div>3. 保存后页面会优先从云端读取数据，上传的本地图片会自动转存到 Supabase Storage。</div>
+              <div>3. 保存后，卡价管理、老卡出售记录和 0754 售出都会优先从云端读取数据，上传的本地图片会自动转存到 Supabase Storage。</div>
               <div>4. 如果要用“截图 AI 识别”，还要再部署 <code>card-screenshot-extract-v1</code>，并在 Edge Functions Secrets 里配置 <code>OPENAI_API_KEY</code>。</div>
             </div>
 
@@ -1738,10 +1926,10 @@ function EditModal({ item, onSave, onClose, onToast }) {
 
     try {
       let result = null;
+      const fallbackUrl = buildTcgMikImageUrl(cardCode);
       try {
         result = await lookupCardImageViaEdgeFunction(cardCode);
       } catch (edgeError) {
-        const fallbackUrl = buildTcgMikImageUrl(cardCode);
         if (!fallbackUrl) throw edgeError;
         result = {
           source: 'tcg.mik.moe',
@@ -1751,8 +1939,19 @@ function EditModal({ item, onSave, onClose, onToast }) {
           setName: ''
         };
       }
-      const url = result.imageUrl;
-      await preloadImageUrl(url);
+      let url = result.imageUrl;
+      try {
+        await preloadImageUrl(url);
+      } catch (preloadError) {
+        if (!fallbackUrl || fallbackUrl === url) throw preloadError;
+        await preloadImageUrl(fallbackUrl);
+        url = fallbackUrl;
+        result = {
+          ...result,
+          source: 'tcg.mik.moe',
+          imageUrl: fallbackUrl
+        };
+      }
       setForm(prev => ({ ...prev, imageUrl: url, cardCode: cardCode }));
       const input = document.getElementById('cardCodeInput');
       if (input) input.value = cardCode;
@@ -1760,7 +1959,12 @@ function EditModal({ item, onSave, onClose, onToast }) {
       onToast?.(`✅ 图片已获取，编号 ${cardCode} 已关联${sourceText}（请点击保存）`);
     } catch (e) {
       console.error('下载失败:', e);
-      alert('❌ 获取图片失败: ' + e.message);
+      const fallbackUrl = buildTcgMikImageUrl(cardCode);
+      if (fallbackUrl) {
+        alert(`❌ 云端查图失败：${e.message}\n\n已为你准备兜底图片地址：\n${fallbackUrl}\n\n刷新页面后再试一次通常就可以直接带出来。`);
+      } else {
+        alert('❌ 获取图片失败: ' + e.message);
+      }
     } finally {
       setIsLoadingImage(false);
     }
@@ -2547,7 +2751,7 @@ function BatchImageModal({ items, onUpdate, onClose, showToast }) {
   );
 }
 
-function OldCardInventoryTab({ showToast }) {
+function OldCardInventoryTab({ showToast, supabaseConfig }) {
   const [items, setItems] = useState(() => {
     try {
       const saved = localStorage.getItem(OLD_CARD_STORAGE_KEY);
@@ -2568,15 +2772,124 @@ function OldCardInventoryTab({ showToast }) {
   const [showScreenshotImport, setShowScreenshotImport] = useState(false);
   const [batchImage, setBatchImage] = useState(false);
   const [page, setPage] = useState(1);
+  const itemsRef = useRef(items);
+  const remoteReadyRef = useRef(false);
+  const skipNextRemoteSaveRef = useRef(false);
+  const syncTimerRef = useRef(null);
+  const supabaseClientRef = useRef(null);
   const PAGE_SIZE = 20;
+
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   useEffect(() => {
     persistItemsToStorage(items, OLD_CARD_STORAGE_KEY);
   }, [items]);
 
   useEffect(() => {
+    return () => {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
     setPage(1);
   }, [search, filter, sortField, sortDir]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    remoteReadyRef.current = false;
+    supabaseClientRef.current = null;
+
+    if (!hasSupabaseCredentials(supabaseConfig)) {
+      remoteReadyRef.current = true;
+      return () => {};
+    }
+
+    const scopedConfig = buildScopedSupabaseConfig(supabaseConfig, OLD_CARD_CLOUD_SCOPE);
+
+    async function initSupabaseSync() {
+      try {
+        const client = createSupabaseBrowserClient(scopedConfig);
+        supabaseClientRef.current = client;
+        const remoteState = await fetchItemsFromSupabase(client, scopedConfig);
+        if (cancelled) return;
+
+        if (remoteState.found) {
+          skipNextRemoteSaveRef.current = true;
+          setItems(remoteState.items);
+        } else {
+          const saveResult = await saveItemsToSupabase(client, scopedConfig, itemsRef.current);
+          if (cancelled) return;
+          if (saveResult.uploadedCount > 0) {
+            skipNextRemoteSaveRef.current = true;
+            setItems(saveResult.items);
+            showToast(`老卡记录有 ${saveResult.uploadedCount} 张图片已上传到云端`);
+          }
+          if (saveResult.failedCount > 0) {
+            showToast(`老卡记录有 ${saveResult.failedCount} 张图片未上传到存储，已先保存在数据库`);
+          }
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('老卡云端同步初始化失败', error);
+          showToast(error?.message ? `老卡云端同步失败：${error.message}` : '老卡云端同步失败');
+        }
+      } finally {
+        if (!cancelled) remoteReadyRef.current = true;
+      }
+    }
+
+    initSupabaseSync();
+
+    return () => {
+      cancelled = true;
+      if (syncTimerRef.current) {
+        clearTimeout(syncTimerRef.current);
+        syncTimerRef.current = null;
+        if (remoteReadyRef.current && supabaseClientRef.current) {
+          saveItemsToSupabase(supabaseClientRef.current, scopedConfig, itemsRef.current).catch(error => {
+            console.error('老卡卸载前云端同步失败', error);
+          });
+        }
+      }
+    };
+  }, [supabaseConfig, showToast]);
+
+  useEffect(() => {
+    if (!hasSupabaseCredentials(supabaseConfig)) return;
+    if (!remoteReadyRef.current) return;
+    if (!supabaseClientRef.current) return;
+    if (skipNextRemoteSaveRef.current) {
+      skipNextRemoteSaveRef.current = false;
+      return;
+    }
+
+    const scopedConfig = buildScopedSupabaseConfig(supabaseConfig, OLD_CARD_CLOUD_SCOPE);
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(async () => {
+      try {
+        const saveResult = await saveItemsToSupabase(supabaseClientRef.current, scopedConfig, itemsRef.current);
+        if (saveResult.uploadedCount > 0) {
+          skipNextRemoteSaveRef.current = true;
+          setItems(saveResult.items);
+          showToast(`老卡记录有 ${saveResult.uploadedCount} 张图片已上传到云端`);
+        }
+        if (saveResult.failedCount > 0) {
+          showToast(`老卡记录有 ${saveResult.failedCount} 张图片未上传到存储，已先保存在数据库`);
+        }
+      } catch (error) {
+        console.error('老卡云端同步失败', error);
+        showToast(error?.message ? `老卡云端同步失败：${error.message}` : '老卡云端同步失败');
+      }
+    }, 700);
+
+    return () => {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    };
+  }, [items, supabaseConfig, showToast]);
 
   function persistItemsToStorage(itemsToStore, storageKey) {
     try {
@@ -3153,7 +3466,9 @@ function App({ onLock }) {
     };
   }, [items, supabaseConfig]);
 
-  function showToast(msg) { setToast(msg); }
+  const showToast = useCallback((msg) => {
+    setToast(msg);
+  }, []);
 
   function handleCloudFormChange(field, value) {
     setCloudForm(prev => ({ ...prev, [field]: value }));
@@ -3671,10 +3986,10 @@ function App({ onLock }) {
       {toast && <Toast message={toast} onDone={() => setToast(null)} />}
 
       {/* 0754 售出 Tab */}
-      {activeTab === '0754' && <Tab0754 />}
+      {activeTab === '0754' && <Tab0754 showToast={showToast} supabaseConfig={supabaseConfig} />}
 
       {/* 老卡出售记录 Tab */}
-      {activeTab === 'old-cards' && <OldCardInventoryTab showToast={showToast} />}
+      {activeTab === 'old-cards' && <OldCardInventoryTab showToast={showToast} supabaseConfig={supabaseConfig} />}
 
       {/* Image Zoom Modal */}
       {zoomedImage && (

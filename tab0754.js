@@ -2,13 +2,21 @@
 // 注意：不使用任何展开运算符(...)，避免兼容问题
 var STORAGE_0754 = '0754-sold-records';
 
-function Tab0754() {
+function Tab0754(props) {
+  props = props || {};
+  var supabaseConfig = props.supabaseConfig;
+  var showToast = typeof props.showToast === 'function' ? props.showToast : function() {};
   var rS = React.useState(function() {
-    try { return JSON.parse(localStorage.getItem(STORAGE_0754) || '[]'); }
+    try { return normalize0754Records(JSON.parse(localStorage.getItem(STORAGE_0754) || '[]')); }
     catch(e) { return []; }
   });
   var records = rS[0], setRecords = rS[1];
   var fileInputRef = React.useRef(null);
+  var recordsRef = React.useRef(records);
+  var remoteReadyRef = React.useRef(false);
+  var skipNextRemoteSaveRef = React.useRef(false);
+  var syncTimerRef = React.useRef(null);
+  var supabaseClientRef = React.useRef(null);
   var iaS = React.useState('');
   var inputAmount = iaS[0], setInputAmount = iaS[1];
   var ldS = React.useState(false);
@@ -24,9 +32,114 @@ function Tab0754() {
   var dtS = React.useState('');
   var dateTo = dtS[0], setDateTo = dtS[1];
 
+  React.useEffect(function() {
+    recordsRef.current = records;
+  }, [records]);
+
+  React.useEffect(function() {
+    try {
+      localStorage.setItem(STORAGE_0754, JSON.stringify(records));
+    } catch (e) {
+      console.error('0754 localStorage 持久化失败', e);
+    }
+  }, [records]);
+
+  React.useEffect(function() {
+    return function() {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    };
+  }, []);
+
+  React.useEffect(function() {
+    var cancelled = false;
+    var scopedConfig = null;
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    remoteReadyRef.current = false;
+    supabaseClientRef.current = null;
+
+    if (!hasSupabaseCredentials(supabaseConfig)) {
+      remoteReadyRef.current = true;
+      return function() {};
+    }
+
+    scopedConfig = buildScopedSupabaseConfig(supabaseConfig, SOLD_0754_CLOUD_SCOPE);
+
+    async function initSupabaseSync() {
+      try {
+        var client = createSupabaseBrowserClient(scopedConfig);
+        var remoteState = null;
+        supabaseClientRef.current = client;
+        remoteState = await fetchPayloadFromSupabase(client, scopedConfig);
+        if (cancelled) return;
+
+        if (remoteState.found) {
+          skipNextRemoteSaveRef.current = true;
+          setRecords(normalize0754Records(remoteState.payload));
+        } else {
+          await savePayloadToSupabase(client, scopedConfig, normalize0754Records(recordsRef.current));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('0754 云端同步初始化失败', error);
+          showToast(error && error.message ? ('0754 云端同步失败：' + error.message) : '0754 云端同步失败');
+        }
+      } finally {
+        if (!cancelled) remoteReadyRef.current = true;
+      }
+    }
+
+    initSupabaseSync();
+
+    return function() {
+      cancelled = true;
+      if (syncTimerRef.current) {
+        clearTimeout(syncTimerRef.current);
+        syncTimerRef.current = null;
+        if (remoteReadyRef.current && supabaseClientRef.current) {
+          savePayloadToSupabase(
+            supabaseClientRef.current,
+            scopedConfig,
+            normalize0754Records(recordsRef.current)
+          ).catch(function(error) {
+            console.error('0754 卸载前云端同步失败', error);
+          });
+        }
+      }
+    };
+  }, [supabaseConfig, showToast]);
+
+  React.useEffect(function() {
+    var scopedConfig = null;
+    if (!hasSupabaseCredentials(supabaseConfig)) return;
+    if (!remoteReadyRef.current) return;
+    if (!supabaseClientRef.current) return;
+    if (skipNextRemoteSaveRef.current) {
+      skipNextRemoteSaveRef.current = false;
+      return;
+    }
+
+    scopedConfig = buildScopedSupabaseConfig(supabaseConfig, SOLD_0754_CLOUD_SCOPE);
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(async function() {
+      try {
+        await savePayloadToSupabase(
+          supabaseClientRef.current,
+          scopedConfig,
+          normalize0754Records(recordsRef.current)
+        );
+      } catch (error) {
+        console.error('0754 云端同步失败', error);
+        showToast(error && error.message ? ('0754 云端同步失败：' + error.message) : '0754 云端同步失败');
+      }
+    }, 700);
+
+    return function() {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    };
+  }, [records, supabaseConfig, showToast]);
+
   function saveRecords(data) {
-    localStorage.setItem(STORAGE_0754, JSON.stringify(data));
-    setRecords(data);
+    setRecords(normalize0754Records(data));
   }
 
   function parseAmountCell(value) {
