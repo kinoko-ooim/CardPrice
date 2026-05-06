@@ -352,9 +352,12 @@
       background: #171717;
       border-radius: 16px;
       border: 1px solid #2e2e2e;
-      overflow: hidden;
+      overflow-x: auto;
+      overflow-y: hidden;
     }
     table { width: 100%; border-collapse: collapse; }
+    .main-card-table { min-width: 1380px; }
+    .old-card-table { min-width: 1080px; }
     thead { background: #111111; }
     th {
       padding: 14px 16px;
@@ -386,8 +389,51 @@
     tr.status-sold:hover td { background: rgba(62,207,142,0.14); }
     tr.status-signed td { background: var(--orange-bg); }
     tr.status-signed:hover td { background: rgba(245,158,11,0.14); }
+    th.action-col,
+    td.action-col {
+      position: sticky;
+      right: 0;
+      z-index: 2;
+      min-width: 132px;
+      background: #171717;
+      box-shadow: -12px 0 18px rgba(0,0,0,0.22);
+    }
+    th.action-col { z-index: 4; background: #111111; }
+    tr:hover td.action-col { background: #1c1c1c; }
+    tr.status-sold td.action-col { background: var(--green-bg); }
+    tr.status-sold:hover td.action-col { background: rgba(62,207,142,0.14); }
+    tr.status-signed td.action-col { background: var(--orange-bg); }
+    tr.status-signed:hover td.action-col { background: rgba(245,158,11,0.14); }
+    .row-actions {
+      display: flex;
+      gap: 6px;
+      justify-content: flex-end;
+      white-space: nowrap;
+    }
 
     .card-name { font-weight: 500; font-size: 15px; color: var(--text); }
+    .price-meta {
+      display: block;
+      margin-top: 3px;
+      color: var(--text-3);
+      font-size: 10px;
+      font-family: var(--mono-font);
+      white-space: nowrap;
+    }
+    .language-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 28px;
+      height: 24px;
+      padding: 0 8px;
+      border-radius: var(--radius-pill);
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.05);
+      color: var(--text-2);
+      font-size: 11px;
+      font-weight: 600;
+    }
     tbody tr img { transition: all 0.15s ease; cursor: zoom-in; border-radius: var(--radius-sm); }
     tbody tr img:hover { opacity: 0.85; transform: scale(1.05); }
 
@@ -413,6 +459,7 @@
 
     .action-btn {
       padding: 8px 12px;
+      flex: 0 0 auto;
       border-radius: 8px;
       border: 1px solid var(--border);
       background: #111111;
@@ -633,8 +680,8 @@
       .stats-bar { grid-template-columns: repeat(2, 1fr); padding: 12px 16px 8px; top: 96px; }
       .toolbar { flex-direction: column; padding: 12px 16px; }
       .filter-group { width: 100%; overflow-x: auto; flex-wrap: nowrap; }
-      .table-wrap { overflow-x: auto; }
-      table { min-width: 800px; }
+      .main-card-table { min-width: 1380px; }
+      .old-card-table { min-width: 1080px; }
       .add-form-grid { grid-template-columns: 1fr 1fr; }
       .add-form { padding: 0 16px; }
       .add-form-toggle { padding: 0 16px; }
@@ -721,6 +768,48 @@ function toInteger(value, fallback = 0) {
   const n = typeof value === 'number' ? value : parseInt(value, 10);
   return Number.isFinite(n) ? n : fallback;
 }
+function normalizeOptionalPrice(...values) {
+  for (const value of values) {
+    if (value === '' || value === null || value === undefined) continue;
+    const n = toNumber(value, NaN);
+    if (Number.isFinite(n)) return round2(n);
+  }
+  return null;
+}
+function normalizeCardLanguage(value) {
+  const text = String(value || '').trim();
+  const aliases = {
+    '简中': '宝可梦简中',
+    '中文': '宝可梦简中',
+    '日文': '宝可梦日文',
+    '日版': '宝可梦日文',
+    '英文': '宝可梦英文',
+    '英版': '宝可梦英文',
+    '繁中': '宝可梦繁中'
+  };
+  return aliases[text] || text;
+}
+function formatPriceUpdatedAt(value) {
+  if (!value) return '';
+  try {
+    return new Date(value).toLocaleString('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch (error) {
+    return '';
+  }
+}
+function languageShortLabel(value) {
+  const normalized = normalizeCardLanguage(value);
+  if (normalized.includes('简')) return '简';
+  if (normalized.includes('繁')) return '繁';
+  if (normalized.includes('日')) return '日';
+  if (normalized.includes('英')) return '英';
+  return normalized ? normalized.slice(0, 1) : '';
+}
 function normalizeSells(item) {
   if (Array.isArray(item?.sells)) {
     return item.sells
@@ -789,7 +878,14 @@ function normalizeItem(raw, index) {
     sells,
     status,
     source: raw.source || '导入备份',
-    profit: totalSell > 0 ? round2(totalSell - cost) : null
+    profit: totalSell > 0 ? round2(totalSell - cost) : null,
+    cardLanguage: normalizeCardLanguage(raw.cardLanguage || raw.language || raw.lang || raw.jhsGameLabel || raw.jhsGame || ''),
+    jhsRawPrice: normalizeOptionalPrice(raw.jhsRawPrice, raw.jhsCirculationPrice, raw.rawMarketPrice, raw.marketPrice, raw.rawPrice),
+    jhsPsa10Price: normalizeOptionalPrice(raw.jhsPsa10Price, raw.psa10Price, raw.psa10),
+    jhsPriceUpdatedAt: raw.jhsPriceUpdatedAt || raw.marketPriceUpdatedAt || raw.priceUpdatedAt || '',
+    jhsPriceNote: raw.jhsPriceNote || raw.marketPriceNote || '',
+    jhsSearchCode: String(raw.jhsSearchCode || raw.jhsQueryCode || '').trim(),
+    jhsGameLabel: raw.jhsGameLabel || raw.jhsGame || ''
   };
 
   if (normalized.imageUrl && !normalized.cardCode) {
@@ -1882,9 +1978,16 @@ function EditModal({ item, onSave, onClose, onToast }) {
     name: item.name,
     imageUrl: item.imageUrl || '',
     cardCode: '', // base64的图片编号异步加载
+    cardLanguage: item.cardLanguage || '',
     unitPrice: item.unitPrice ?? '',
     qty: item.qty ?? '',
     cost: item.cost ?? '',
+    jhsRawPrice: item.jhsRawPrice ?? '',
+    jhsPsa10Price: item.jhsPsa10Price ?? '',
+    jhsPriceUpdatedAt: item.jhsPriceUpdatedAt || '',
+    jhsPriceNote: item.jhsPriceNote || '',
+    jhsSearchCode: item.jhsSearchCode || '',
+    jhsGameLabel: item.jhsGameLabel || '',
     status: item.status,
     sells: (item.sells || []).map(s => ({ ...s }))
   });
@@ -2009,9 +2112,16 @@ function EditModal({ item, onSave, onClose, onToast }) {
       name: form.name.trim(),
       imageUrl: savedImageUrl,
       cardCode: savedCardCode,
+      cardLanguage: form.cardLanguage,
       unitPrice: form.unitPrice === '' ? null : parseFloat(form.unitPrice),
       qty: form.qty === '' ? 1 : parseInt(form.qty),
       cost,
+      jhsRawPrice: form.jhsRawPrice === '' ? null : round2(parseFloat(form.jhsRawPrice)),
+      jhsPsa10Price: form.jhsPsa10Price === '' ? null : round2(parseFloat(form.jhsPsa10Price)),
+      jhsPriceUpdatedAt: form.jhsPriceUpdatedAt || item.jhsPriceUpdatedAt || '',
+      jhsPriceNote: form.jhsPriceNote.trim(),
+      jhsSearchCode: form.jhsSearchCode.trim(),
+      jhsGameLabel: form.jhsGameLabel,
       sells: form.sells.filter(s => s.total > 0),
       status: form.status,
       profit
@@ -2073,6 +2183,17 @@ function EditModal({ item, onSave, onClose, onToast }) {
                 ✓ 已关联编号：{form.cardCode}
               </div>
             )}
+          </div>
+          <div className="form-group">
+            <label className="form-label">语言版本标识</label>
+            <select className="form-input" value={form.cardLanguage} onChange={e => update('cardLanguage', e.target.value)}>
+              <option value="">未标识</option>
+              <option value="宝可梦简中">宝可梦简中</option>
+              <option value="宝可梦日文">宝可梦日文</option>
+              <option value="宝可梦英文">宝可梦英文</option>
+              <option value="宝可梦繁中">宝可梦繁中</option>
+              <option value="其他">其他</option>
+            </select>
           </div>
           <div className="form-group">
             <label className="form-label">
@@ -2153,6 +2274,44 @@ function EditModal({ item, onSave, onClose, onToast }) {
           </div>
           <div style={{display:'flex',gap:8,alignItems:'center',fontSize:13,color:'var(--text-2)',marginBottom:4}}>
             剩余 <strong style={{color: remaining >= 0 ? 'var(--text)' : 'var(--red)',fontSize:15}}>{remaining}</strong> 张
+          </div>
+
+          <div className="modal-section-title" style={{marginTop:20}}>集换社参考价</div>
+          <div className="form-row" style={{gridTemplateColumns:'1fr 1fr'}}>
+            <div className="form-group">
+              <label className="form-label">集换社搜索编号</label>
+              <input className="form-input" value={form.jhsSearchCode} onChange={e => update('jhsSearchCode', e.target.value)} placeholder={form.cardCode || '默认使用卡牌编号'} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">集换社游戏语言</label>
+              <select className="form-input" value={form.jhsGameLabel} onChange={e => update('jhsGameLabel', e.target.value)}>
+                <option value="">跟随语言标识/自动判断</option>
+                <option value="宝可梦简中">宝可梦简中</option>
+                <option value="宝可梦日文">宝可梦日文</option>
+                <option value="宝可梦英文">宝可梦英文</option>
+                <option value="宝可梦繁中">宝可梦繁中</option>
+              </select>
+            </div>
+          </div>
+          <div className="form-row" style={{gridTemplateColumns:'1fr 1fr'}}>
+            <div className="form-group">
+              <label className="form-label">流通品价 (¥)</label>
+              <input className="form-input" type="number" step="0.01" value={form.jhsRawPrice} onChange={e => update('jhsRawPrice', e.target.value)} placeholder="每日任务自动更新" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">PSA10价 (¥)</label>
+              <input className="form-input" type="number" step="0.01" value={form.jhsPsa10Price} onChange={e => update('jhsPsa10Price', e.target.value)} placeholder="每日任务自动更新" />
+            </div>
+          </div>
+          <div className="form-row" style={{gridTemplateColumns:'1fr 1fr'}}>
+            <div className="form-group">
+              <label className="form-label">价格更新时间</label>
+              <input className="form-input" value={form.jhsPriceUpdatedAt} onChange={e => update('jhsPriceUpdatedAt', e.target.value)} placeholder="自动记录" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">更新备注</label>
+              <input className="form-input" value={form.jhsPriceNote} onChange={e => update('jhsPriceNote', e.target.value)} placeholder="如：按 SV-P-098 搜索" />
+            </div>
           </div>
 
           {/* 售出记录区块 */}
@@ -2477,7 +2636,7 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
 // Add Card Form — 简化版
 function AddCardForm({ onAdd, onCancel }) {
   const [form, setForm] = useState({
-    name: '', unitPrice: '', qty: '1', cost: '',
+    name: '', unitPrice: '', qty: '1', cost: '', cardLanguage: '',
     status: '未售出',
     sells: []
   });
@@ -2505,12 +2664,13 @@ function AddCardForm({ onAdd, onCancel }) {
       unitPrice: form.unitPrice === '' ? null : parseFloat(form.unitPrice),
       qty: form.qty === '' ? 1 : parseInt(form.qty),
       cost,
+      cardLanguage: form.cardLanguage,
       sells: form.sells,
       status: form.status,
       source: '手动添加',
       profit: totalSell > 0 ? round2(totalSell - cost) : null
     });
-    setForm({ name: '', unitPrice: '', qty: '1', cost: '', status: '未售出', sells: [] });
+    setForm({ name: '', unitPrice: '', qty: '1', cost: '', cardLanguage: '', status: '未售出', sells: [] });
   }
   return (
     <div className="add-form">
@@ -2524,6 +2684,17 @@ function AddCardForm({ onAdd, onCancel }) {
           <div className="form-group">
             <label className="form-label">单价 (¥)</label>
             <input className="form-input" type="number" step="0.01" value={form.unitPrice} onChange={e => update('unitPrice', e.target.value)} placeholder="0.00" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">语言版本</label>
+            <select className="form-input" value={form.cardLanguage} onChange={e => update('cardLanguage', e.target.value)}>
+              <option value="">未标识</option>
+              <option value="宝可梦简中">宝可梦简中</option>
+              <option value="宝可梦日文">宝可梦日文</option>
+              <option value="宝可梦英文">宝可梦英文</option>
+              <option value="宝可梦繁中">宝可梦繁中</option>
+              <option value="其他">其他</option>
+            </select>
           </div>
           <div className="form-group">
             <label className="form-label">数量</label>
@@ -2910,6 +3081,7 @@ function OldCardInventoryTab({ showToast, supabaseConfig }) {
   function getSortVal(item, field) {
     if (field === 'remaining') return (item.qty ?? 0) - (item.sells || []).reduce((s, v) => s + (v.qty || 0), 0);
     if (field === 'soldValue') return (item.sells || []).reduce((s, v) => s + (v.total || 0), 0);
+    if (field === 'cardLanguage') return item.cardLanguage || item.jhsGameLabel || '';
     let val = item[field];
     if (val === null || val === undefined) {
       return field === 'profit' ? -Infinity : (typeof items?.[0]?.[field] === 'number' ? -Infinity : '');
@@ -2924,7 +3096,12 @@ function OldCardInventoryTab({ showToast, supabaseConfig }) {
     else if (filter === '未售出') list = list.filter(i => i.status === '未售出');
     if (search.trim()) {
       const q = search.trim().toLowerCase();
-      list = list.filter(i => String(i.name || '').toLowerCase().includes(q));
+      list = list.filter(i =>
+        String(i.name || '').toLowerCase().includes(q) ||
+        String(i.cardLanguage || '').toLowerCase().includes(q) ||
+        String(i.jhsGameLabel || '').toLowerCase().includes(q) ||
+        languageShortLabel(i.cardLanguage).toLowerCase().includes(q)
+      );
     }
     list = [...list].sort((a, b) => {
       const rawA = getSortVal(a, sortField);
@@ -2996,14 +3173,14 @@ function OldCardInventoryTab({ showToast, supabaseConfig }) {
   }
 
   function exportCSV() {
-    const headers = ['ID', '名称', '单价', '数量', '已售数量', '剩余数量', '成本', '已售总收入', '利润', '状态', '来源'];
+    const headers = ['ID', '名称', '语言版本', '单价', '数量', '已售数量', '剩余数量', '成本', '集换社搜索编号', '集换社游戏语言', '流通品价', 'PSA10价', '价格更新时间', '价格备注', '已售总收入', '利润', '状态', '来源'];
     const sortedForExport = [...items].sort((a, b) => a.id - b.id);
     const exportRows = sortedForExport.map(i => {
       const sells = i.sells || [];
       const totalSellQty = sells.reduce((s, v) => s + (v.qty || 0), 0);
       const totalSellVal = sells.reduce((s, v) => s + (v.total || 0), 0);
       const remaining = (i.qty || 0) - totalSellQty;
-      return [i.id, i.name, i.unitPrice ?? '', i.qty ?? '', totalSellQty, remaining, i.cost ?? '', totalSellVal || '', i.profit ?? '', i.status, i.source];
+      return [i.id, i.name, i.cardLanguage || i.jhsGameLabel || '', i.unitPrice ?? '', i.qty ?? '', totalSellQty, remaining, i.cost ?? '', i.jhsSearchCode || '', i.jhsGameLabel || '', i.jhsRawPrice ?? '', i.jhsPsa10Price ?? '', i.jhsPriceUpdatedAt || '', i.jhsPriceNote || '', totalSellVal || '', i.profit ?? '', i.status, i.source];
     });
     const csv = [headers, ...exportRows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -3185,7 +3362,7 @@ function OldCardInventoryTab({ showToast, supabaseConfig }) {
 
         <div className="table-container">
           <div className="table-wrap">
-            <table>
+            <table className="old-card-table">
               <thead>
                 <tr>
                   <th style={{width: 60, textAlign:'center'}} onClick={() => handleSort('id')} className={sortField === 'id' ? 'sorted' : ''}>ID <SortIcon field="id"/></th>
@@ -3198,7 +3375,7 @@ function OldCardInventoryTab({ showToast, supabaseConfig }) {
                   <th onClick={() => handleSort('soldValue')} className={sortField === 'soldValue' ? 'sorted' : ''} style={{textAlign:'right', fontSize: 11}}>已售 <SortIcon field="soldValue"/></th>
                   <th onClick={() => handleSort('profit')} className={sortField === 'profit' ? 'sorted' : ''} style={{textAlign:'right'}}>利润 <SortIcon field="profit"/></th>
                   <th onClick={() => handleSort('status')} className={sortField === 'status' ? 'sorted' : ''} style={{width:100}}>状态 <SortIcon field="status"/></th>
-                  <th style={{width: 120}}>操作</th>
+                  <th className="action-col" style={{width: 132}}>操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -3241,8 +3418,8 @@ function OldCardInventoryTab({ showToast, supabaseConfig }) {
                       ) : '—'}
                     </td>
                     <td><span className={statusBadgeClass(item)}>{statusBadgeText(item)}</span></td>
-                    <td>
-                      <div style={{display:'flex', gap:4}}>
+                    <td className="action-col">
+                      <div className="row-actions">
                         <button className="action-btn" onClick={() => setEditingItem(item)}>编辑</button>
                         <button className="action-btn" style={{color:'var(--red)', borderColor:'var(--red-border)', background:'var(--red-bg)'}} onClick={() => handleDelete(item.id)}>删除</button>
                       </div>
@@ -3330,6 +3507,8 @@ function App({ onLock }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showScreenshotImport, setShowScreenshotImport] = useState(false);
   const [batchImage, setBatchImage] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkLanguage, setBulkLanguage] = useState('');
   const [toast, setToast] = useState(null);
   const [page, setPage] = useState(1);
   const [showCloudConfig, setShowCloudConfig] = useState(false);
@@ -3348,6 +3527,14 @@ function App({ onLock }) {
 
   useEffect(() => {
     itemsRef.current = items;
+  }, [items]);
+
+  useEffect(() => {
+    setSelectedIds(prev => {
+      const existingIds = new Set(items.map(item => item.id));
+      const next = prev.filter(id => existingIds.has(id));
+      return next.length === prev.length ? prev : next;
+    });
   }, [items]);
 
   useEffect(() => {
@@ -3512,6 +3699,7 @@ function App({ onLock }) {
   const getSortVal = useCallback((item, field) => {
     if (field === 'remaining') return (item.qty ?? 0) - (item.sells || []).reduce((s, v) => s + (v.qty || 0), 0);
     if (field === 'soldValue') return (item.sells || []).reduce((s, v) => s + (v.total || 0), 0);
+    if (field === 'cardLanguage') return item.cardLanguage || item.jhsGameLabel || '';
     let val = item[field];
     if (val === null || val === undefined) { return field === 'profit' ? -Infinity : (typeof items?.[0]?.[field] === 'number' ? -Infinity : ''); }
     return val;
@@ -3525,7 +3713,12 @@ function App({ onLock }) {
     else if (filter === '未售出') list = list.filter(i => i.status === '未售出');
     if (search.trim()) {
       const q = search.trim().toLowerCase();
-      list = list.filter(i => String(i.name || '').toLowerCase().includes(q));
+      list = list.filter(i =>
+        String(i.name || '').toLowerCase().includes(q) ||
+        String(i.cardLanguage || '').toLowerCase().includes(q) ||
+        String(i.jhsGameLabel || '').toLowerCase().includes(q) ||
+        languageShortLabel(i.cardLanguage).toLowerCase().includes(q)
+      );
     }
     // Sort — supports both direct fields and computed fields
     list = [...list].sort((a, b) => {
@@ -3551,6 +3744,9 @@ function App({ onLock }) {
   // Pagination
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const pageIds = paginated.map(item => item.id);
+  const isPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIdSet.has(id));
 
   function handleSort(field) {
     if (sortField === field) { setSortDir(d => d === 'asc' ? 'desc' : 'asc'); }
@@ -3587,7 +3783,47 @@ function App({ onLock }) {
   function handleDelete(id) {
     if (!confirm('确定要删除这条记录吗？')) return;
     setItems(prev => prev.filter(i => i.id !== id));
+    setSelectedIds(prev => prev.filter(selectedId => selectedId !== id));
     showToast('已删除');
+  }
+
+  function toggleSelectItem(id, checked) {
+    setSelectedIds(prev => {
+      if (checked) return prev.includes(id) ? prev : [...prev, id];
+      return prev.filter(selectedId => selectedId !== id);
+    });
+  }
+
+  function toggleSelectPage(checked) {
+    setSelectedIds(prev => {
+      if (checked) {
+        const next = new Set(prev);
+        pageIds.forEach(id => next.add(id));
+        return Array.from(next);
+      }
+      const pageIdSet = new Set(pageIds);
+      return prev.filter(id => !pageIdSet.has(id));
+    });
+  }
+
+  function handleBulkLanguageUpdate(scope) {
+    const language = normalizeCardLanguage(bulkLanguage);
+    if (!language) {
+      showToast('请先选择语言标识');
+      return;
+    }
+    const targetIds = scope === 'filtered' ? filtered.map(item => item.id) : selectedIds;
+    if (targetIds.length === 0) {
+      showToast(scope === 'filtered' ? '当前筛选结果为空' : '请先勾选要打标的商品');
+      return;
+    }
+    const targetIdSet = new Set(targetIds);
+    setItems(prev => prev.map(item => targetIdSet.has(item.id) ? {
+      ...item,
+      cardLanguage: language,
+      jhsGameLabel: language
+    } : item));
+    showToast(`已给 ${targetIds.length} 个商品标识为 ${languageShortLabel(language)} ✓`);
   }
 
   function handleBulkMarkSigned() {
@@ -3601,14 +3837,14 @@ function App({ onLock }) {
   }
 
   function exportCSV() {
-    const headers = ['ID', '名称', '单价', '数量', '已售数量', '剩余数量', '成本', '已售总收入', '利润', '状态', '来源'];
+    const headers = ['ID', '名称', '语言版本', '集换社搜索编号', '集换社游戏语言', '流通品价', 'PSA10价', '价格更新时间', '价格备注', '单价', '数量', '已售数量', '剩余数量', '成本', '已售总收入', '利润', '状态', '来源'];
     const sortedForExport = [...items].sort((a, b) => a.id - b.id);
     const exportRows = sortedForExport.map(i => {
       const sells = i.sells || [];
       const totalSellQty = sells.reduce((s, v) => s + (v.qty || 0), 0);
       const totalSellVal = sells.reduce((s, v) => s + (v.total || 0), 0);
       const remaining = (i.qty || 0) - totalSellQty;
-      return [i.id, i.name, i.unitPrice ?? '', i.qty ?? '', totalSellQty, remaining, i.cost ?? '', totalSellVal || '', i.profit ?? '', i.status, i.source];
+      return [i.id, i.name, i.cardLanguage || i.jhsGameLabel || '', i.jhsSearchCode || '', i.jhsGameLabel || '', i.jhsRawPrice ?? '', i.jhsPsa10Price ?? '', i.jhsPriceUpdatedAt || '', i.jhsPriceNote || '', i.unitPrice ?? '', i.qty ?? '', totalSellQty, remaining, i.cost ?? '', totalSellVal || '', i.profit ?? '', i.status, i.source];
     });
     const csv = [headers, ...exportRows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -3830,11 +4066,16 @@ function App({ onLock }) {
             <option value="id|asc">⇅ ID 升序</option>
             <option value="name|asc">⇅ 名称 A→Z</option>
             <option value="name|desc">⇅ 名称 Z→A</option>
+            <option value="cardLanguage|asc">⇅ 语言 A→Z</option>
             <option value="unitPrice|desc">⇅ 单价 高→低</option>
             <option value="unitPrice|asc">⇅ 单价 低→高</option>
             <option value="qty|desc">⇅ 数量 多→少</option>
             <option value="cost|desc">⇅ 成本 高→低</option>
             <option value="cost|asc">⇅ 成本 低→高</option>
+            <option value="jhsRawPrice|desc">⇅ 流通品价 高→低</option>
+            <option value="jhsRawPrice|asc">⇅ 流通品价 低→高</option>
+            <option value="jhsPsa10Price|desc">⇅ PSA10价 高→低</option>
+            <option value="jhsPsa10Price|asc">⇅ PSA10价 低→高</option>
             <option value="remaining|desc">⇅ 剩余 多→少</option>
             <option value="remaining|asc">⇅ 剩余 少→多</option>
             <option value="soldValue|desc">⇅ 已售额 高→低</option>
@@ -3842,6 +4083,16 @@ function App({ onLock }) {
             <option value="profit|desc">⇅ 利润 高→低</option>
             <option value="profit|asc">⇅ 利润 低→高</option>
           </select>
+          <select value={bulkLanguage} onChange={e => setBulkLanguage(e.target.value)} className="toolbar-select" title="批量语言标识">
+            <option value="">语言标识</option>
+            <option value="宝可梦简中">简中</option>
+            <option value="宝可梦繁中">繁中</option>
+            <option value="宝可梦日文">日文</option>
+            <option value="宝可梦英文">英文</option>
+          </select>
+          <button className="btn btn-secondary" onClick={() => handleBulkLanguageUpdate('selected')}>应用已选 {selectedIds.length || ''}</button>
+          <button className="btn btn-secondary" onClick={() => handleBulkLanguageUpdate('filtered')}>应用当前筛选 {filtered.length}</button>
+          {selectedIds.length > 0 && <button className="btn btn-secondary" onClick={() => setSelectedIds([])}>清空选择</button>}
           <button className="btn btn-secondary" onClick={handleBulkMarkSigned}>批量设为待签收</button>
         </div>
       </div>
@@ -3861,27 +4112,36 @@ function App({ onLock }) {
       {/* Table */}
       <div className="table-container">
         <div className="table-wrap">
-          <table>
+          <table className="main-card-table">
             <thead>
               <tr>
+                <th style={{width: 44, textAlign:'center'}}>
+                  <input type="checkbox" checked={isPageSelected} onChange={e => toggleSelectPage(e.target.checked)} title="选择当前页" />
+                </th>
                 <th style={{width: 60, textAlign:'center'}} onClick={() => handleSort('id')} className={sortField === 'id' ? 'sorted' : ''}>ID <SortIcon field="id"/></th>
                 <th style={{width: 56, textAlign:'center'}}>图</th>
                 <th onClick={() => handleSort('name')} className={sortField === 'name' ? 'sorted' : ''}>卡牌名称 <SortIcon field="name"/></th>
+                <th onClick={() => handleSort('cardLanguage')} className={sortField === 'cardLanguage' ? 'sorted' : ''} style={{width:62,textAlign:'center'}}>语 <SortIcon field="cardLanguage"/></th>
                 <th onClick={() => handleSort('unitPrice')} className={sortField === 'unitPrice' ? 'sorted' : ''} style={{textAlign:'right'}}>单价 <SortIcon field="unitPrice"/></th>
                 <th onClick={() => handleSort('qty')} className={sortField === 'qty' ? 'sorted' : ''} style={{textAlign:'right'}}>数量 <SortIcon field="qty"/></th>
                 <th onClick={() => handleSort('remaining')} className={sortField === 'remaining' ? 'sorted' : ''} style={{textAlign:'right'}}>剩余 <SortIcon field="remaining"/></th>
                 <th onClick={() => handleSort('cost')} className={sortField === 'cost' ? 'sorted' : ''} style={{textAlign:'right'}}>成本 <SortIcon field="cost"/></th>
+                <th onClick={() => handleSort('jhsRawPrice')} className={sortField === 'jhsRawPrice' ? 'sorted' : ''} style={{textAlign:'right'}}>流通品 <SortIcon field="jhsRawPrice"/></th>
+                <th onClick={() => handleSort('jhsPsa10Price')} className={sortField === 'jhsPsa10Price' ? 'sorted' : ''} style={{textAlign:'right'}}>PSA10 <SortIcon field="jhsPsa10Price"/></th>
                 <th onClick={() => handleSort('soldValue')} className={sortField === 'soldValue' ? 'sorted' : ''} style={{textAlign:'right', fontSize: 11}}>已售 <SortIcon field="soldValue"/></th>
                 <th onClick={() => handleSort('profit')} className={sortField === 'profit' ? 'sorted' : ''} style={{textAlign:'right'}}>利润 <SortIcon field="profit"/></th>
                 <th onClick={() => handleSort('status')} className={sortField === 'status' ? 'sorted' : ''} style={{width:100}}>状态 <SortIcon field="status"/></th>
-                <th style={{width: 120}}>操作</th>
+                <th className="action-col" style={{width: 132}}>操作</th>
               </tr>
             </thead>
             <tbody>
               {paginated.length === 0 ? (
-                <tr><td colSpan={11}><div className="empty-state"><div className="empty-icon">📭</div>没有找到匹配的卡牌</div></td></tr>
+                <tr><td colSpan={15}><div className="empty-state"><div className="empty-icon">📭</div>没有找到匹配的卡牌</div></td></tr>
               ) : paginated.map((item, idx) => (
                 <tr key={item.id} className={rowClass(item)}>
+                  <td style={{textAlign:'center'}}>
+                    <input type="checkbox" checked={selectedIdSet.has(item.id)} onChange={e => toggleSelectItem(item.id, e.target.checked)} title={`选择 ${item.name}`} />
+                  </td>
                   <td style={{color: 'var(--text-3)', fontSize: 12, textAlign:'center'}}>{item.id}</td>
                   <td>
                     {item.imageUrl ? (
@@ -3897,12 +4157,23 @@ function App({ onLock }) {
                     )}
                   </td>
                   <td className="card-name">{item.name}</td>
+                  <td style={{textAlign:'center'}}>
+                    {(item.cardLanguage || item.jhsGameLabel) ? <span className="language-badge" title={item.cardLanguage || item.jhsGameLabel}>{languageShortLabel(item.cardLanguage || item.jhsGameLabel)}</span> : <span style={{color:'var(--text-3)'}}>—</span>}
+                  </td>
                   <td className="price-cell" style={{textAlign:'right'}}>{item.unitPrice !== null ? '¥' + item.unitPrice.toLocaleString('zh-CN', {minimumFractionDigits:2}) : '—'}</td>
                   <td className="price-cell" style={{textAlign:'right'}}>{item.qty ?? '—'}</td>
                   <td className="price-cell" style={{textAlign:'right', color: 'var(--text-3)'}}>
                     {(item.qty ?? 0) - (item.sells || []).reduce((s, v) => s + (v.qty || 0), 0)}
                   </td>
                   <td className="price-cell" style={{textAlign:'right'}}>{item.cost !== null ? formatMoney(item.cost) : '—'}</td>
+                  <td className="price-cell" style={{textAlign:'right'}}>
+                    {formatMoney(item.jhsRawPrice)}
+                    {item.jhsPriceUpdatedAt && <span className="price-meta">{formatPriceUpdatedAt(item.jhsPriceUpdatedAt)}</span>}
+                  </td>
+                  <td className="price-cell" style={{textAlign:'right'}}>
+                    {formatMoney(item.jhsPsa10Price)}
+                    {item.jhsPriceNote && <span className="price-meta">{item.jhsPriceNote}</span>}
+                  </td>
                   <td className="price-cell" style={{textAlign:'right', color: 'var(--green)', fontWeight:600}}>
                     {(item.sells || []).reduce((s, v) => s + (v.qty || 0), 0) > 0
                       ? (() => {
@@ -3920,8 +4191,8 @@ function App({ onLock }) {
                     ) : '—'}
                   </td>
                   <td><span className={statusBadgeClass(item)}>{statusBadgeText(item)}</span></td>
-                  <td>
-                    <div style={{display:'flex', gap:4}}>
+                  <td className="action-col">
+                    <div className="row-actions">
                       <button className="action-btn" onClick={() => setEditingItem(item)}>编辑</button>
                       <button className="action-btn" style={{color:'var(--red)', borderColor:'var(--red-border)', background:'var(--red-bg)'}} onClick={() => handleDelete(item.id)}>删除</button>
                     </div>
