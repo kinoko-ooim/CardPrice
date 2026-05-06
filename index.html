@@ -420,6 +420,16 @@
       font-family: var(--mono-font);
       white-space: nowrap;
     }
+    .price-delta {
+      display: block;
+      margin-top: 3px;
+      font-size: 10px;
+      font-family: var(--mono-font);
+      white-space: nowrap;
+    }
+    .price-delta.up { color: var(--green); }
+    .price-delta.down { color: var(--red); }
+    .price-delta.flat { color: var(--text-3); }
     .price-note-wrap {
       display: flex;
       justify-content: flex-end;
@@ -813,6 +823,55 @@ function normalizeOptionalPrice(...values) {
   }
   return null;
 }
+function normalizePriceHistory(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(entry => {
+      if (!entry || typeof entry !== 'object') return null;
+      const checkedAt = String(entry.checkedAt || entry.updatedAt || entry.date || '').trim();
+      const rawPrice = normalizeOptionalPrice(entry.rawPrice, entry.jhsRawPrice);
+      const psa10Price = normalizeOptionalPrice(entry.psa10Price, entry.jhsPsa10Price);
+      const note = String(entry.note || '').trim();
+      if (!checkedAt && rawPrice === null && psa10Price === null) return null;
+      return { checkedAt, rawPrice, psa10Price, note };
+    })
+    .filter(Boolean)
+    .slice(-120);
+}
+function previousTrackedPrice(item, field) {
+  const history = normalizePriceHistory(item?.jhsPriceHistory);
+  if (history.length < 2) return null;
+  const key = field === 'raw' ? 'rawPrice' : 'psa10Price';
+  const currentAt = String(item?.jhsPriceUpdatedAt || '').trim();
+  let latestIndex = history.length - 1;
+  if (currentAt) {
+    const matched = history.map(entry => entry.checkedAt).lastIndexOf(currentAt);
+    if (matched >= 0) latestIndex = matched;
+  }
+  for (let i = latestIndex - 1; i >= 0; i--) {
+    if (history[i][key] !== null && history[i][key] !== undefined) return history[i][key];
+  }
+  return null;
+}
+function priceDeltaInfo(item, field) {
+  const current = field === 'raw' ? item?.jhsRawPrice : item?.jhsPsa10Price;
+  const currentPrice = normalizeOptionalPrice(current);
+  const previousPrice = previousTrackedPrice(item, field);
+  if (currentPrice === null) return null;
+  if (previousPrice === null) return { delta: 0, percent: 0 };
+  const delta = round2(currentPrice - previousPrice);
+  const percent = previousPrice ? round2((delta / previousPrice) * 100) : null;
+  return { delta, percent };
+}
+function renderPriceDelta(item, field) {
+  const info = priceDeltaInfo(item, field);
+  if (!info) return null;
+  if (info.delta === 0) return <span className="price-delta flat">+¥0.00 (+0.0%)</span>;
+  const isUp = info.delta > 0;
+  const sign = isUp ? '+' : '-';
+  const pct = info.percent === null ? '' : ` (${sign}${Math.abs(info.percent).toFixed(1)}%)`;
+  return <span className={`price-delta ${isUp ? 'up' : 'down'}`}>{sign}{formatMoney(Math.abs(info.delta))}{pct}</span>;
+}
 function normalizeCardLanguage(value) {
   const text = String(value || '').trim();
   const aliases = {
@@ -921,6 +980,7 @@ function normalizeItem(raw, index) {
     jhsPsa10Price: normalizeOptionalPrice(raw.jhsPsa10Price, raw.psa10Price, raw.psa10),
     jhsPriceUpdatedAt: raw.jhsPriceUpdatedAt || raw.marketPriceUpdatedAt || raw.priceUpdatedAt || '',
     jhsPriceNote: raw.jhsPriceNote || raw.marketPriceNote || '',
+    jhsPriceHistory: normalizePriceHistory(raw.jhsPriceHistory || raw.priceHistory),
     jhsSearchCode: String(raw.jhsSearchCode || raw.jhsQueryCode || '').trim(),
     jhsGameLabel: raw.jhsGameLabel || raw.jhsGame || ''
   };
@@ -975,22 +1035,29 @@ function makeBackupSafeItems(items) {
 }
 async function saveBlobWithPicker(blob, suggestedName, options) {
   if (window.showSaveFilePicker) {
-    const handle = await window.showSaveFilePicker({
-      suggestedName,
-      types: options?.types || []
-    });
-    const writable = await handle.createWritable();
-    await writable.write(blob);
-    await writable.close();
-    return { savedWithPicker: true };
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName,
+        types: options?.types || []
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return { savedWithPicker: true };
+    } catch (error) {
+      if (error?.name === 'AbortError') throw error;
+      console.warn('文件选择器保存失败，改用浏览器下载', error);
+    }
   }
 
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = suggestedName;
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
   return { savedWithPicker: false };
 }
 function persistItemsToStorage(items) {
@@ -4218,10 +4285,12 @@ function App({ onLock }) {
                   <td className="price-cell" style={{textAlign:'right'}}>{item.cost !== null ? formatMoney(item.cost) : '—'}</td>
                   <td className="price-cell" style={{textAlign:'right'}}>
                     {formatMoney(item.jhsRawPrice)}
+                    {renderPriceDelta(item, 'raw')}
                     {item.jhsPriceUpdatedAt && <span className="price-meta">{formatPriceUpdatedAt(item.jhsPriceUpdatedAt)}</span>}
                   </td>
                   <td className="price-cell" style={{textAlign:'right'}}>
                     {formatMoney(item.jhsPsa10Price)}
+                    {renderPriceDelta(item, 'psa10')}
                     {item.jhsPriceNote && (
                       <span className="price-note-wrap">
                         <span

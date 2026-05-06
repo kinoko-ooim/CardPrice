@@ -1039,6 +1039,79 @@ def normalize_item(raw: Any, index: int) -> dict[str, Any]:
     }
 
 
+def price_number(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return round(float(value), 2)
+    except (TypeError, ValueError):
+        return None
+
+
+def normalize_price_history(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    history: list[dict[str, Any]] = []
+    for entry in value:
+        if not isinstance(entry, dict):
+            continue
+        checked_at = str(entry.get("checkedAt") or entry.get("updatedAt") or entry.get("date") or "").strip()
+        raw_price = price_number(entry.get("rawPrice", entry.get("jhsRawPrice")))
+        psa10_price = price_number(entry.get("psa10Price", entry.get("jhsPsa10Price")))
+        if not checked_at and raw_price is None and psa10_price is None:
+            continue
+        history.append(
+            {
+                "checkedAt": checked_at,
+                "rawPrice": raw_price,
+                "psa10Price": psa10_price,
+                "note": str(entry.get("note") or "").strip(),
+            }
+        )
+    return history[-120:]
+
+
+def append_price_history(item: dict[str, Any], checked_at: str, previous_note: str = "") -> None:
+    history = normalize_price_history(item.get("jhsPriceHistory"))
+    raw_price = price_number(item.get("jhsRawPrice"))
+    psa10_price = price_number(item.get("jhsPsa10Price"))
+    previous_checked_at = str(item.get("jhsPriceUpdatedAt") or "").strip()
+
+    if previous_checked_at and not any(entry.get("checkedAt") == previous_checked_at for entry in history):
+        previous_raw = price_number(item.get("_previousJhsRawPrice"))
+        previous_psa10 = price_number(item.get("_previousJhsPsa10Price"))
+        if previous_raw is not None or previous_psa10 is not None:
+            history.append(
+                {
+                    "checkedAt": previous_checked_at,
+                    "rawPrice": previous_raw,
+                    "psa10Price": previous_psa10,
+                    "note": previous_note,
+                }
+            )
+
+    if history and history[-1].get("checkedAt") == checked_at:
+        history[-1] = {
+            "checkedAt": checked_at,
+            "rawPrice": raw_price,
+            "psa10Price": psa10_price,
+            "note": str(item.get("jhsPriceNote") or "").strip(),
+        }
+    else:
+        history.append(
+            {
+                "checkedAt": checked_at,
+                "rawPrice": raw_price,
+                "psa10Price": psa10_price,
+                "note": str(item.get("jhsPriceNote") or "").strip(),
+            }
+        )
+
+    item["jhsPriceHistory"] = history[-120:]
+    item.pop("_previousJhsRawPrice", None)
+    item.pop("_previousJhsPsa10Price", None)
+
+
 def decode_card_code_from_file_stem(stem: str) -> str:
     match = re.match(r"^(.*)-(\d{3})-([A-Za-z0-9.-]+)$", stem)
     if match:
@@ -1177,12 +1250,16 @@ def update_items(
                 checkpoint()
             continue
 
+        previous_note = str(item.get("jhsPriceNote") or "").strip()
+        item["_previousJhsRawPrice"] = item.get("jhsRawPrice")
+        item["_previousJhsPsa10Price"] = item.get("jhsPsa10Price")
         if result.raw_price is not None:
             item["jhsRawPrice"] = result.raw_price
         if result.psa10_price is not None:
             item["jhsPsa10Price"] = result.psa10_price
-        item["jhsPriceUpdatedAt"] = checked_at
         item["jhsPriceNote"] = result.note
+        append_price_history(item, checked_at, previous_note=previous_note)
+        item["jhsPriceUpdatedAt"] = checked_at
         updated += 1
         print(
             f"  -> updated: raw={item.get('jhsRawPrice')} psa10={item.get('jhsPsa10Price')} note={item.get('jhsPriceNote') or ''}",
