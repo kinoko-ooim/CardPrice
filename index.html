@@ -420,6 +420,43 @@
       font-family: var(--mono-font);
       white-space: nowrap;
     }
+    .price-note-wrap {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 3px;
+    }
+    .price-note-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(245,158,11,0.45);
+      background: rgba(245,158,11,0.12);
+      color: var(--orange);
+      font-size: 9px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: help;
+    }
+    .price-note-tooltip {
+      position: fixed;
+      z-index: 10000;
+      max-width: min(320px, calc(100vw - 32px));
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(245,158,11,0.32);
+      background: #1f1710;
+      color: var(--text);
+      box-shadow: 0 12px 30px rgba(0,0,0,0.36);
+      font-size: 12px;
+      line-height: 1.55;
+      text-align: left;
+      white-space: normal;
+      word-break: break-word;
+      pointer-events: none;
+    }
     .language-badge {
       display: inline-flex;
       align-items: center;
@@ -3510,6 +3547,7 @@ function App({ onLock }) {
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkLanguage, setBulkLanguage] = useState('');
   const [toast, setToast] = useState(null);
+  const [priceNoteTooltip, setPriceNoteTooltip] = useState(null);
   const [page, setPage] = useState(1);
   const [showCloudConfig, setShowCloudConfig] = useState(false);
   const [cloudForm, setCloudForm] = useState(() => readSupabaseConfig());
@@ -3656,6 +3694,18 @@ function App({ onLock }) {
   const showToast = useCallback((msg) => {
     setToast(msg);
   }, []);
+
+  const showPriceNoteTooltip = (event, text) => {
+    if (!text) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = Math.min(window.innerWidth - 16, Math.max(16, rect.right));
+    const y = Math.max(16, rect.top - 8);
+    setPriceNoteTooltip({ text, x, y });
+  };
+
+  const hidePriceNoteTooltip = () => {
+    setPriceNoteTooltip(null);
+  };
 
   function handleCloudFormChange(field, value) {
     setCloudForm(prev => ({ ...prev, [field]: value }));
@@ -4172,7 +4222,19 @@ function App({ onLock }) {
                   </td>
                   <td className="price-cell" style={{textAlign:'right'}}>
                     {formatMoney(item.jhsPsa10Price)}
-                    {item.jhsPriceNote && <span className="price-meta">{item.jhsPriceNote}</span>}
+                    {item.jhsPriceNote && (
+                      <span className="price-note-wrap">
+                        <span
+                          className="price-note-icon"
+                          tabIndex="0"
+                          aria-label={`价格备注：${item.jhsPriceNote}`}
+                          onMouseEnter={e => showPriceNoteTooltip(e, item.jhsPriceNote)}
+                          onMouseLeave={hidePriceNoteTooltip}
+                          onFocus={e => showPriceNoteTooltip(e, item.jhsPriceNote)}
+                          onBlur={hidePriceNoteTooltip}
+                        >!</span>
+                      </span>
+                    )}
                   </td>
                   <td className="price-cell" style={{textAlign:'right', color: 'var(--green)', fontWeight:600}}>
                     {(item.sells || []).reduce((s, v) => s + (v.qty || 0), 0) > 0
@@ -4255,6 +4317,18 @@ function App({ onLock }) {
 
       {/* Toast */}
       {toast && <Toast message={toast} onDone={() => setToast(null)} />}
+      {priceNoteTooltip && (
+        <div
+          className="price-note-tooltip"
+          style={{
+            left: priceNoteTooltip.x,
+            top: priceNoteTooltip.y,
+            transform: 'translate(-100%, -100%)'
+          }}
+        >
+          {priceNoteTooltip.text}
+        </div>
+      )}
 
       {/* 0754 售出 Tab */}
       {activeTab === '0754' && <Tab0754 showToast={showToast} supabaseConfig={supabaseConfig} />}
