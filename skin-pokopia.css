@@ -452,6 +452,23 @@ tbody tr.status-signed {
   gap: 7px;
 }
 
+th.action-col,
+td.action-col {
+  position: static !important;
+  right: auto !important;
+  z-index: auto !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+tr:hover td.action-col,
+tr.status-sold td.action-col,
+tr.status-sold:hover td.action-col,
+tr.status-signed td.action-col,
+tr.status-signed:hover td.action-col {
+  background: transparent !important;
+}
+
 .action-btn {
   background: rgba(13, 20, 16, 0.78) !important;
   color: var(--text-2) !important;
