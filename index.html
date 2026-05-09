@@ -3468,6 +3468,7 @@ function OldCardInventoryTab({ showToast, supabaseConfig }) {
 
         <div className="table-container">
           <div className="table-wrap">
+            <div className="table-scroll">
             <table className="old-card-table">
               <thead>
                 <tr>
@@ -3534,6 +3535,7 @@ function OldCardInventoryTab({ showToast, supabaseConfig }) {
                 ))}
               </tbody>
             </table>
+            </div>
 
             {totalPages > 1 && (
               <div style={{padding:'16px', display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'1px solid var(--border)'}}>
@@ -4231,6 +4233,7 @@ function App({ onLock }) {
       {/* Table */}
       <div className="table-container">
         <div className="table-wrap">
+          <div className="table-scroll">
           <table className="main-card-table">
             <thead>
               <tr>
@@ -4334,6 +4337,7 @@ function App({ onLock }) {
               ))}
             </tbody>
           </table>
+          </div>
 
           {/* Pagination */}
           {totalPages > 1 && (

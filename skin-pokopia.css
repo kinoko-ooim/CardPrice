@@ -43,6 +43,7 @@ html {
 body {
   font-family: 'Nunito', 'Manrope', 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
   color: var(--text);
+  overflow-x: hidden;
   background:
     radial-gradient(circle at 12% -8%, rgba(62, 207, 142, 0.18), transparent 32%),
     radial-gradient(circle at 88% 10%, rgba(62, 207, 142, 0.10), transparent 30%),
@@ -300,28 +301,34 @@ body::after {
 
 .table-wrap {
   border-radius: 28px;
+  overflow: hidden;
+}
+
+.table-scroll {
   overflow-x: auto;
   overflow-y: hidden;
+  max-width: 100%;
+  overscroll-behavior-x: contain;
   scrollbar-color: rgba(62, 207, 142, 0.52) rgba(8, 12, 10, 0.72);
   scrollbar-width: thin;
 }
 
-.table-wrap::-webkit-scrollbar {
+.table-scroll::-webkit-scrollbar {
   height: 12px;
 }
 
-.table-wrap::-webkit-scrollbar-track {
+.table-scroll::-webkit-scrollbar-track {
   background: rgba(8, 12, 10, 0.72);
   border-radius: 999px;
 }
 
-.table-wrap::-webkit-scrollbar-thumb {
+.table-scroll::-webkit-scrollbar-thumb {
   background: linear-gradient(90deg, rgba(62,207,142,0.42), rgba(116,242,183,0.74));
   border: 3px solid rgba(8, 12, 10, 0.72);
   border-radius: 999px;
 }
 
-.table-wrap::-webkit-scrollbar-thumb:hover {
+.table-scroll::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(90deg, rgba(62,207,142,0.62), rgba(116,242,183,0.92));
 }
 
@@ -472,23 +479,47 @@ tbody tr.status-signed {
 
 .row-actions {
   gap: 7px;
+  flex-wrap: nowrap;
+  justify-content: center;
 }
 
 th.action-col,
 td.action-col {
-  position: static !important;
-  right: auto !important;
-  z-index: auto !important;
-  box-shadow: none !important;
-  background: transparent !important;
+  position: sticky !important;
+  right: 0 !important;
+  z-index: 5 !important;
+  width: 164px !important;
+  min-width: 164px;
+  background: rgba(9, 15, 12, 0.96) !important;
+  box-shadow: -1px 0 0 rgba(62,207,142,0.12), -18px 0 28px rgba(0,0,0,0.28) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  white-space: nowrap;
 }
 
-tr:hover td.action-col,
-tr.status-sold td.action-col,
-tr.status-sold:hover td.action-col,
-tr.status-signed td.action-col,
+th.action-col {
+  z-index: 8 !important;
+  background: rgba(7, 12, 9, 0.98) !important;
+}
+
+tr:hover td.action-col {
+  background: rgba(13, 23, 18, 0.98) !important;
+}
+
+tr.status-sold td.action-col {
+  background: rgba(12, 35, 24, 0.98) !important;
+}
+
+tr.status-sold:hover td.action-col {
+  background: rgba(15, 46, 31, 0.98) !important;
+}
+
+tr.status-signed td.action-col {
+  background: rgba(34, 28, 13, 0.98) !important;
+}
+
 tr.status-signed:hover td.action-col {
-  background: transparent !important;
+  background: rgba(43, 34, 15, 0.98) !important;
 }
 
 .action-btn {
