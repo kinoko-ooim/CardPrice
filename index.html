@@ -874,6 +874,12 @@ function renderPriceDelta(item, field) {
   const pct = info.percent === null ? '' : ` (${sign}${Math.abs(info.percent).toFixed(1)}%)`;
   return <span className={`price-delta ${isUp ? 'up' : 'down'}`}>{sign}{formatMoney(Math.abs(info.delta))}{pct}</span>;
 }
+function priceChangeSortValue(item, field) {
+  const info = priceDeltaInfo(item, field);
+  if (!info) return null;
+  if (info.percent !== null && Number.isFinite(info.percent)) return info.percent;
+  return info.delta;
+}
 function normalizeCardLanguage(value) {
   const text = String(value || '').trim();
   const aliases = {
@@ -3821,6 +3827,8 @@ function App({ onLock }) {
     if (field === 'remaining') return (item.qty ?? 0) - (item.sells || []).reduce((s, v) => s + (v.qty || 0), 0);
     if (field === 'soldValue') return (item.sells || []).reduce((s, v) => s + (v.total || 0), 0);
     if (field === 'cardLanguage') return item.cardLanguage || item.jhsGameLabel || '';
+    if (field === 'jhsRawPrice') return priceChangeSortValue(item, 'raw');
+    if (field === 'jhsPsa10Price') return priceChangeSortValue(item, 'psa10');
     let val = item[field];
     if (val === null || val === undefined) { return field === 'profit' ? -Infinity : (typeof items?.[0]?.[field] === 'number' ? -Infinity : ''); }
     return val;
@@ -3845,6 +3853,13 @@ function App({ onLock }) {
     list = [...list].sort((a, b) => {
       const rawA = getSortVal(a, sortField);
       const rawB = getSortVal(b, sortField);
+      if (sortField === 'jhsRawPrice' || sortField === 'jhsPsa10Price') {
+        const missingA = rawA === null || rawA === undefined || rawA === '';
+        const missingB = rawB === null || rawB === undefined || rawB === '';
+        if (missingA && missingB) return 0;
+        if (missingA) return 1;
+        if (missingB) return -1;
+      }
       // Handle string comparison
       if (typeof rawA === 'string' && typeof rawB === 'string') {
         const av = rawA.toLowerCase(), bv = rawB.toLowerCase();
@@ -4193,10 +4208,10 @@ function App({ onLock }) {
             <option value="qty|desc">⇅ 数量 多→少</option>
             <option value="cost|desc">⇅ 成本 高→低</option>
             <option value="cost|asc">⇅ 成本 低→高</option>
-            <option value="jhsRawPrice|desc">⇅ 流通品价 高→低</option>
-            <option value="jhsRawPrice|asc">⇅ 流通品价 低→高</option>
-            <option value="jhsPsa10Price|desc">⇅ PSA10价 高→低</option>
-            <option value="jhsPsa10Price|asc">⇅ PSA10价 低→高</option>
+            <option value="jhsRawPrice|desc">⇅ 流通品涨幅 高→低</option>
+            <option value="jhsRawPrice|asc">⇅ 流通品跌幅 高→低</option>
+            <option value="jhsPsa10Price|desc">⇅ PSA10涨幅 高→低</option>
+            <option value="jhsPsa10Price|asc">⇅ PSA10跌幅 高→低</option>
             <option value="remaining|desc">⇅ 剩余 多→少</option>
             <option value="remaining|asc">⇅ 剩余 少→多</option>
             <option value="soldValue|desc">⇅ 已售额 高→低</option>
