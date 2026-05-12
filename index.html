@@ -2530,6 +2530,31 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
     reader.readAsDataURL(selectedFile);
   }
 
+  useEffect(() => {
+    function handlePaste(event) {
+      const items = Array.from(event.clipboardData?.items || []);
+      const imageItem = items.find(item => item.kind === 'file' && item.type.startsWith('image/'));
+      if (!imageItem) return;
+
+      const pastedFile = imageItem.getAsFile();
+      if (!pastedFile) {
+        showToast('剪贴板里没有可用图片');
+        return;
+      }
+
+      event.preventDefault();
+      const extension = (pastedFile.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+      const screenshotFile = new File([pastedFile], `clipboard-screenshot-${Date.now()}.${extension}`, {
+        type: pastedFile.type || 'image/png'
+      });
+      handleFileChange(screenshotFile);
+      showToast('已粘贴截图，可以开始识别');
+    }
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, []);
+
   function normalizeRecognizedDrafts(items) {
     return items
       .map(item => ({
@@ -2663,7 +2688,7 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
             </label>
             <div style={{flex:'1 1 320px', minWidth:260}}>
               <div style={{fontSize:13, color:'var(--text-2)', lineHeight:1.7, marginBottom:12}}>
-                支持识别截图里的卡名、编号、价格和数量。推荐优先用 AI 识别；本地 OCR 继续保留，适合作为备用方案。
+                支持识别截图里的卡名、编号、价格和数量。可以点击选择截图，也可以直接 Ctrl/⌘ + V 粘贴截图。推荐优先用 AI 识别；本地 OCR 继续保留，适合作为备用方案。
               </div>
               <div style={{display:'flex', gap:10, flexWrap:'wrap'}}>
                 <button className="btn btn-primary" onClick={handleRecognizeAi} disabled={!file || loading}>
