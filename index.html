@@ -412,6 +412,12 @@
     }
 
     .card-name { font-weight: 500; font-size: 15px; color: var(--text); }
+    .card-name-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
     .price-meta {
       display: block;
       margin-top: 3px;
@@ -430,6 +436,32 @@
     .price-delta.up { color: var(--green); }
     .price-delta.down { color: var(--red); }
     .price-delta.flat { color: var(--text-3); }
+    .unit-ref-delta {
+      display: block;
+      margin-top: 4px;
+      font-size: 10px;
+      font-family: var(--mono-font);
+      white-space: nowrap;
+      font-weight: 700;
+    }
+    .unit-ref-delta.up { color: var(--green); }
+    .unit-ref-delta.down { color: var(--red); }
+    .unit-ref-delta.flat { color: var(--text-3); }
+    .psa10-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 20px;
+      padding: 0 7px;
+      border-radius: var(--radius-pill);
+      border: 1px solid rgba(245,158,11,0.42);
+      background: rgba(245,158,11,0.12);
+      color: var(--orange);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0;
+      white-space: nowrap;
+    }
     .price-note-wrap {
       display: flex;
       justify-content: flex-end;
@@ -596,6 +628,33 @@
     .form-input:focus { border-color: rgba(62,207,142,0.36); box-shadow: 0 0 0 1px rgba(62,207,142,0.3); }
     .form-input::placeholder { color: var(--text-3); }
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-check-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 13px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #0f0f0f;
+      color: var(--text-2);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.18s ease;
+    }
+    .form-check-option:hover { border-color: rgba(62,207,142,0.36); color: var(--text); }
+    .form-check-option.active {
+      border-color: rgba(245,158,11,0.42);
+      background: rgba(245,158,11,0.12);
+      color: var(--orange);
+    }
+    .form-check-option input {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--orange);
+      margin: 0;
+    }
     .status-options { display: flex; gap: 8px; }
     .status-option {
       flex: 1; padding: 10px 8px;
@@ -765,6 +824,7 @@ const TCGCOLLECTOR_SETS_URL = 'https://www.tcgcollector.com/sets/jp?cardCountMod
 const TCGCOLLECTOR_SEARCH_URL = 'https://www.tcgcollector.com/cards/jp?cardSource=inCardVariant&releaseDateOrder=newToOld&displayAs=images&cardSearch={query}';
 const OLD_CARD_CLOUD_SCOPE = 'old-cards';
 const SOLD_0754_CLOUD_SCOPE = '0754-sold';
+let memoryAccessGranted = false;
 const SUPABASE_DEFAULT_CONFIG = {
   url: 'https://hnnzyrslsmpankpkhjho.supabase.co',
   anonKey: 'sb_publishable_-rtge5LdKWSnkwKUFWc-aQ_gu3Q8vj0',
@@ -873,6 +933,31 @@ function renderPriceDelta(item, field) {
   const sign = isUp ? '+' : '-';
   const pct = info.percent === null ? '' : ` (${sign}${Math.abs(info.percent).toFixed(1)}%)`;
   return <span className={`price-delta ${isUp ? 'up' : 'down'}`}>{sign}{formatMoney(Math.abs(info.delta))}{pct}</span>;
+}
+function unitReferenceDeltaInfo(item) {
+  const unitPrice = normalizeOptionalPrice(item?.unitPrice);
+  if (unitPrice === null) return null;
+  const referencePrice = item?.isPsa10 ? normalizeOptionalPrice(item?.jhsPsa10Price) : normalizeOptionalPrice(item?.jhsRawPrice);
+  if (referencePrice === null) return null;
+  const delta = round2(referencePrice - unitPrice);
+  const percent = unitPrice ? round2((delta / unitPrice) * 100) : null;
+  return {
+    delta,
+    percent,
+    label: item?.isPsa10 ? 'PSA10' : '流通品'
+  };
+}
+function renderUnitReferenceDelta(item) {
+  const info = unitReferenceDeltaInfo(item);
+  if (!info) return null;
+  const sign = info.delta > 0 ? '+' : info.delta < 0 ? '-' : '+';
+  const cls = info.delta > 0 ? 'up' : info.delta < 0 ? 'down' : 'flat';
+  const pct = info.percent === null ? '' : ` (${sign}${Math.abs(info.percent).toFixed(1)}%)`;
+  return (
+    <span className={`unit-ref-delta ${cls}`} title={`单价对比${info.label}参考价`}>
+      {sign}{formatMoney(Math.abs(info.delta))}{pct}
+    </span>
+  );
 }
 function priceChangeSortValue(item, field) {
   const info = priceDeltaInfo(item, field);
@@ -983,6 +1068,7 @@ function normalizeItem(raw, index) {
     status,
     source: raw.source || '导入备份',
     profit: totalSell > 0 ? round2(totalSell - cost) : null,
+    isPsa10: raw.isPsa10 === true || raw.isPsa10 === 'true' || raw.grade === 'PSA10' || raw.gradeLabel === 'PSA10',
     cardLanguage: normalizeCardLanguage(raw.cardLanguage || raw.language || raw.lang || raw.jhsGameLabel || raw.jhsGame || ''),
     jhsRawPrice: normalizeOptionalPrice(raw.jhsRawPrice, raw.jhsCirculationPrice, raw.rawMarketPrice, raw.marketPrice, raw.rawPrice),
     jhsPsa10Price: normalizeOptionalPrice(raw.jhsPsa10Price, raw.psa10Price, raw.psa10),
@@ -1885,6 +1971,26 @@ function Toast({ message, onDone }) {
   return <div className="toast">{message}</div>;
 }
 
+function readAccessGranted() {
+  if (memoryAccessGranted) return true;
+  try {
+    return sessionStorage.getItem(ACCESS_SESSION_KEY) === '1';
+  } catch (error) {
+    return false;
+  }
+}
+
+function writeAccessGranted(value) {
+  memoryAccessGranted = !!value;
+  try {
+    if (value) {
+      sessionStorage.setItem(ACCESS_SESSION_KEY, '1');
+    } else {
+      sessionStorage.removeItem(ACCESS_SESSION_KEY);
+    }
+  } catch (error) {}
+}
+
 function PasswordGate({ onUnlock }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -1899,7 +2005,7 @@ function PasswordGate({ onUnlock }) {
       if (digest !== ACCESS_PASSWORD_HASH) {
         throw new Error('密码不正确');
       }
-      sessionStorage.setItem(ACCESS_SESSION_KEY, '1');
+      writeAccessGranted(true);
       onUnlock();
     } catch (err) {
       setError(err?.message || '验证失败');
@@ -2100,6 +2206,7 @@ function EditModal({ item, onSave, onClose, onToast }) {
     jhsPriceNote: item.jhsPriceNote || '',
     jhsSearchCode: item.jhsSearchCode || '',
     jhsGameLabel: item.jhsGameLabel || '',
+    isPsa10: !!item.isPsa10,
     status: item.status,
     sells: (item.sells || []).map(s => ({ ...s }))
   });
@@ -2234,6 +2341,7 @@ function EditModal({ item, onSave, onClose, onToast }) {
       jhsPriceNote: form.jhsPriceNote.trim(),
       jhsSearchCode: form.jhsSearchCode.trim(),
       jhsGameLabel: form.jhsGameLabel,
+      isPsa10: !!form.isPsa10,
       sells: form.sells.filter(s => s.total > 0),
       status: form.status,
       profit
@@ -2386,6 +2494,16 @@ function EditModal({ item, onSave, onClose, onToast }) {
           </div>
           <div style={{display:'flex',gap:8,alignItems:'center',fontSize:13,color:'var(--text-2)',marginBottom:4}}>
             剩余 <strong style={{color: remaining >= 0 ? 'var(--text)' : 'var(--red)',fontSize:15}}>{remaining}</strong> 张
+          </div>
+          <div className="form-group">
+            <label className={`form-check-option ${form.isPsa10 ? 'active' : ''}`}>
+              <input
+                type="checkbox"
+                checked={!!form.isPsa10}
+                onChange={e => update('isPsa10', e.target.checked)}
+              />
+              <span>这张卡是 PSA10</span>
+            </label>
           </div>
 
           <div className="modal-section-title" style={{marginTop:20}}>集换社参考价</div>
@@ -2774,6 +2892,7 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
 function AddCardForm({ onAdd, onCancel }) {
   const [form, setForm] = useState({
     name: '', unitPrice: '', qty: '1', cost: '', cardLanguage: '',
+    isPsa10: false,
     status: '未售出',
     sells: []
   });
@@ -2802,12 +2921,13 @@ function AddCardForm({ onAdd, onCancel }) {
       qty: form.qty === '' ? 1 : parseInt(form.qty),
       cost,
       cardLanguage: form.cardLanguage,
+      isPsa10: !!form.isPsa10,
       sells: form.sells,
       status: form.status,
       source: '手动添加',
       profit: totalSell > 0 ? round2(totalSell - cost) : null
     });
-    setForm({ name: '', unitPrice: '', qty: '1', cost: '', cardLanguage: '', status: '未售出', sells: [] });
+    setForm({ name: '', unitPrice: '', qty: '1', cost: '', cardLanguage: '', isPsa10: false, status: '未售出', sells: [] });
   }
   return (
     <div className="add-form">
@@ -2840,6 +2960,17 @@ function AddCardForm({ onAdd, onCancel }) {
           <div className="form-group">
             <label className="form-label">成本 (¥) <span style={{fontSize:11,color:'var(--text-3)'}}>自动=单价×数量</span></label>
             <input className="form-input" type="number" step="0.01" value={form.cost} onChange={e => update('cost', e.target.value)} placeholder="自动计算" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">PSA10标识</label>
+            <label className={`form-check-option ${form.isPsa10 ? 'active' : ''}`}>
+              <input
+                type="checkbox"
+                checked={!!form.isPsa10}
+                onChange={e => update('isPsa10', e.target.checked)}
+              />
+              <span>PSA10</span>
+            </label>
           </div>
           <div className="form-group" style={{gridColumn:'1 / -1'}}>
             <label className="form-label">状态</label>
@@ -3310,14 +3441,14 @@ function OldCardInventoryTab({ showToast, supabaseConfig }) {
   }
 
   function exportCSV() {
-    const headers = ['ID', '名称', '语言版本', '单价', '数量', '已售数量', '剩余数量', '成本', '集换社搜索编号', '集换社游戏语言', '流通品价', 'PSA10价', '价格更新时间', '价格备注', '已售总收入', '利润', '状态', '来源'];
+    const headers = ['ID', '名称', '是否PSA10', '语言版本', '单价', '数量', '已售数量', '剩余数量', '成本', '集换社搜索编号', '集换社游戏语言', '流通品价', 'PSA10价', '价格更新时间', '价格备注', '已售总收入', '利润', '状态', '来源'];
     const sortedForExport = [...items].sort((a, b) => a.id - b.id);
     const exportRows = sortedForExport.map(i => {
       const sells = i.sells || [];
       const totalSellQty = sells.reduce((s, v) => s + (v.qty || 0), 0);
       const totalSellVal = sells.reduce((s, v) => s + (v.total || 0), 0);
       const remaining = (i.qty || 0) - totalSellQty;
-      return [i.id, i.name, i.cardLanguage || i.jhsGameLabel || '', i.unitPrice ?? '', i.qty ?? '', totalSellQty, remaining, i.cost ?? '', i.jhsSearchCode || '', i.jhsGameLabel || '', i.jhsRawPrice ?? '', i.jhsPsa10Price ?? '', i.jhsPriceUpdatedAt || '', i.jhsPriceNote || '', totalSellVal || '', i.profit ?? '', i.status, i.source];
+      return [i.id, i.name, i.isPsa10 ? '是' : '', i.cardLanguage || i.jhsGameLabel || '', i.unitPrice ?? '', i.qty ?? '', totalSellQty, remaining, i.cost ?? '', i.jhsSearchCode || '', i.jhsGameLabel || '', i.jhsRawPrice ?? '', i.jhsPsa10Price ?? '', i.jhsPriceUpdatedAt || '', i.jhsPriceNote || '', totalSellVal || '', i.profit ?? '', i.status, i.source];
     });
     const csv = [headers, ...exportRows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -3534,8 +3665,16 @@ function OldCardInventoryTab({ showToast, supabaseConfig }) {
                         <div style={{width:40,height:40,borderRadius:10,border:'1px dashed var(--border)',background:'#111111',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>🃏</div>
                       )}
                     </td>
-                    <td className="card-name">{item.name}</td>
-                    <td className="price-cell" style={{textAlign:'right'}}>{item.unitPrice !== null ? '¥' + item.unitPrice.toLocaleString('zh-CN', {minimumFractionDigits:2}) : '—'}</td>
+                    <td className="card-name">
+                      <span className="card-name-line">
+                        <span>{item.name}</span>
+                        {item.isPsa10 && <span className="psa10-badge">PSA10</span>}
+                      </span>
+                    </td>
+                    <td className="price-cell" style={{textAlign:'right'}}>
+                      {item.unitPrice !== null ? '¥' + item.unitPrice.toLocaleString('zh-CN', {minimumFractionDigits:2}) : '—'}
+                      {renderUnitReferenceDelta(item)}
+                    </td>
                     <td className="price-cell" style={{textAlign:'right'}}>{item.qty ?? '—'}</td>
                     <td className="price-cell" style={{textAlign:'right', color: 'var(--text-3)'}}>{(item.qty ?? 0) - (item.sells || []).reduce((s, v) => s + (v.qty || 0), 0)}</td>
                     <td className="price-cell" style={{textAlign:'right'}}>{item.cost !== null ? formatMoney(item.cost) : '—'}</td>
@@ -3998,14 +4137,14 @@ function App({ onLock }) {
   }
 
   function exportCSV() {
-    const headers = ['ID', '名称', '语言版本', '集换社搜索编号', '集换社游戏语言', '流通品价', 'PSA10价', '价格更新时间', '价格备注', '单价', '数量', '已售数量', '剩余数量', '成本', '已售总收入', '利润', '状态', '来源'];
+    const headers = ['ID', '名称', '是否PSA10', '语言版本', '集换社搜索编号', '集换社游戏语言', '流通品价', 'PSA10价', '价格更新时间', '价格备注', '单价', '数量', '已售数量', '剩余数量', '成本', '已售总收入', '利润', '状态', '来源'];
     const sortedForExport = [...items].sort((a, b) => a.id - b.id);
     const exportRows = sortedForExport.map(i => {
       const sells = i.sells || [];
       const totalSellQty = sells.reduce((s, v) => s + (v.qty || 0), 0);
       const totalSellVal = sells.reduce((s, v) => s + (v.total || 0), 0);
       const remaining = (i.qty || 0) - totalSellQty;
-      return [i.id, i.name, i.cardLanguage || i.jhsGameLabel || '', i.jhsSearchCode || '', i.jhsGameLabel || '', i.jhsRawPrice ?? '', i.jhsPsa10Price ?? '', i.jhsPriceUpdatedAt || '', i.jhsPriceNote || '', i.unitPrice ?? '', i.qty ?? '', totalSellQty, remaining, i.cost ?? '', totalSellVal || '', i.profit ?? '', i.status, i.source];
+      return [i.id, i.name, i.isPsa10 ? '是' : '', i.cardLanguage || i.jhsGameLabel || '', i.jhsSearchCode || '', i.jhsGameLabel || '', i.jhsRawPrice ?? '', i.jhsPsa10Price ?? '', i.jhsPriceUpdatedAt || '', i.jhsPriceNote || '', i.unitPrice ?? '', i.qty ?? '', totalSellQty, remaining, i.cost ?? '', totalSellVal || '', i.profit ?? '', i.status, i.source];
     });
     const csv = [headers, ...exportRows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -4318,11 +4457,19 @@ function App({ onLock }) {
                       <div style={{width:40,height:40,borderRadius:10,border:'1px dashed var(--border)',background:'#111111',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,cursor:'pointer',flexShrink:0,color:'var(--primary)'}} title={`为「${item.name}」搜索图片`} onClick={e => { e.stopPropagation(); window.open(`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(item.name + ' 宝可梦卡牌')}`, '_blank'); }}>🔍</div>
                     )}
                   </td>
-                  <td className="card-name">{item.name}</td>
+                  <td className="card-name">
+                    <span className="card-name-line">
+                      <span>{item.name}</span>
+                      {item.isPsa10 && <span className="psa10-badge">PSA10</span>}
+                    </span>
+                  </td>
                   <td style={{textAlign:'center'}}>
                     {(item.cardLanguage || item.jhsGameLabel) ? <span className="language-badge" title={item.cardLanguage || item.jhsGameLabel}>{languageShortLabel(item.cardLanguage || item.jhsGameLabel)}</span> : <span style={{color:'var(--text-3)'}}>—</span>}
                   </td>
-                  <td className="price-cell" style={{textAlign:'right'}}>{item.unitPrice !== null ? '¥' + item.unitPrice.toLocaleString('zh-CN', {minimumFractionDigits:2}) : '—'}</td>
+                  <td className="price-cell" style={{textAlign:'right'}}>
+                    {item.unitPrice !== null ? '¥' + item.unitPrice.toLocaleString('zh-CN', {minimumFractionDigits:2}) : '—'}
+                    {renderUnitReferenceDelta(item)}
+                  </td>
                   <td className="price-cell" style={{textAlign:'right'}}>{item.qty ?? '—'}</td>
                   <td className="price-cell" style={{textAlign:'right', color: 'var(--text-3)'}}>
                     {(item.qty ?? 0) - (item.sells || []).reduce((s, v) => s + (v.qty || 0), 0)}
@@ -4484,22 +4631,14 @@ function App({ onLock }) {
 }
 
 function ProtectedApp() {
-  const [isUnlocked, setIsUnlocked] = useState(() => {
-    try {
-      return sessionStorage.getItem(ACCESS_SESSION_KEY) === '1';
-    } catch (error) {
-      return false;
-    }
-  });
+  const [isUnlocked, setIsUnlocked] = useState(() => readAccessGranted());
 
   function handleUnlock() {
     setIsUnlocked(true);
   }
 
   function handleLock() {
-    try {
-      sessionStorage.removeItem(ACCESS_SESSION_KEY);
-    } catch (error) {}
+    writeAccessGranted(false);
     setIsUnlocked(false);
   }
 
