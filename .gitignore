@@ -4,10 +4,10 @@
 .LSOverride
 
 # Numbers 内部文件（二进制格式无法解析）
-numbers_extracted/
+data/numbers_extracted/
 
 # 备份数据（敏感数据）
-备份数据/
+data/backups/
 
 # Python 缓存
 __pycache__/
@@ -29,15 +29,16 @@ __pycache__/
 .playwright/
 
 # 迁移脚本（临时）
-migrate_cardcode.py
-migrate_cardcode.js
+scripts/migrate_cardcode.py
+scripts/migrate_cardcode.js
 
 # 原始数据文件（太大）
-卡价.numbers
+data/卡价.numbers
 卡价.xlsx
-图片URL映射表.txt
-卡牌图片搜索指南.md
-card_data.json
-fetch_images.py
-migrate.py
+docs/图片URL映射表.txt
+docs/卡牌图片搜索指南.md
+data/card_data.json
+scripts/fetch_images.py
+scripts/migrate.py
 clear_cache.html
+docs/图片搜索链接.txt

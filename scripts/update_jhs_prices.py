@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 import glob
+import http.client
 import json
 import os
 import re
@@ -26,7 +27,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
@@ -40,6 +41,8 @@ DEFAULT_SUPABASE_ANON_KEY = "sb_publishable_-rtge5LdKWSnkwKUFWc-aQ_gu3Q8vj0"
 BUNDLED_NODE_BIN = Path.home() / ".cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node"
 BUNDLED_NODE_MODULES = Path.home() / ".cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules"
 JHS_APP_NAME = "集换社"
+JHS_LOW_INTERRUPTION = False
+JHS_PREVIOUS_FRONT_APP = ""
 
 
 class AXCGSize(ctypes.Structure):
@@ -60,6 +63,11 @@ APP_SERVICES.AXUIElementSetAttributeValue.restype = ctypes.c_int
 APP_SERVICES.AXUIElementSetAttributeValue.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
 APP_SERVICES.AXUIElementPerformAction.restype = ctypes.c_int
 APP_SERVICES.AXUIElementPerformAction.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+try:
+    APP_SERVICES.AXUIElementSetMessagingTimeout.restype = ctypes.c_int
+    APP_SERVICES.AXUIElementSetMessagingTimeout.argtypes = [ctypes.c_void_p, ctypes.c_float]
+except AttributeError:
+    pass
 APP_SERVICES.AXValueGetValue.restype = ctypes.c_bool
 APP_SERVICES.AXValueGetValue.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p]
 APP_SERVICES.CGEventCreateKeyboardEvent.restype = ctypes.c_void_p
@@ -302,7 +310,15 @@ def lookup_card_prices(card_code: str, limit: int = 80) -> PriceResult:
 
 
 def run_command(args: list[str], timeout: float = 15, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(args, text=True, capture_output=True, timeout=timeout, env=env, check=False)
+    try:
+        return subprocess.run(args, text=True, capture_output=True, timeout=timeout, env=env, check=False)
+    except subprocess.TimeoutExpired as exc:
+        return subprocess.CompletedProcess(
+            args,
+            124,
+            stdout=(exc.stdout or "") if isinstance(exc.stdout, str) else "",
+            stderr=f"command timed out after {timeout} seconds",
+        )
 
 
 def run_osascript(script: str, timeout: float = 10) -> str:
@@ -310,6 +326,67 @@ def run_osascript(script: str, timeout: float = 10) -> str:
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.strip() or proc.stdout.strip() or "osascript failed")
     return proc.stdout.strip()
+
+
+def truthy_env(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def remember_front_app() -> None:
+    global JHS_PREVIOUS_FRONT_APP
+    if not JHS_LOW_INTERRUPTION or JHS_PREVIOUS_FRONT_APP:
+        return
+    try:
+        app_name = run_osascript(
+            'tell application "System Events" to name of first application process whose frontmost is true',
+            timeout=5,
+        ).strip()
+    except Exception:
+        return
+    if app_name and app_name != JHS_APP_NAME:
+        JHS_PREVIOUS_FRONT_APP = app_name
+
+
+def restore_front_app() -> None:
+    if not JHS_LOW_INTERRUPTION or not JHS_PREVIOUS_FRONT_APP or JHS_PREVIOUS_FRONT_APP == JHS_APP_NAME:
+        return
+    escaped = JHS_PREVIOUS_FRONT_APP.replace("\\", "\\\\").replace('"', '\\"')
+    try:
+        run_osascript(f'tell application "{escaped}" to activate', timeout=5)
+    except Exception:
+        pass
+
+
+def arrange_jhs_window_low_interruption() -> None:
+    if not JHS_LOW_INTERRUPTION:
+        return
+    script = r'''
+tell application "Finder" to set screenBounds to bounds of window of desktop
+set screenLeft to item 1 of screenBounds
+set screenTop to item 2 of screenBounds
+set screenRight to item 3 of screenBounds
+set screenBottom to item 4 of screenBounds
+set targetWidth to 430
+set targetHeight to 820
+set availableHeight to screenBottom - screenTop
+if targetHeight > availableHeight - 80 then set targetHeight to availableHeight - 80
+if targetHeight < 620 then set targetHeight to availableHeight
+set xPos to screenRight - targetWidth - 16
+if xPos < screenLeft then set xPos to screenLeft
+set yPos to screenTop + 40
+tell application "System Events"
+  tell process "集换社"
+    tell window 1
+      set size to {targetWidth, targetHeight}
+      set position to {xPos, yPos}
+    end tell
+  end tell
+end tell
+'''
+    try:
+        run_osascript(script, timeout=8)
+    except Exception:
+        pass
 
 
 def cf_release(ref: int | None) -> None:
@@ -340,10 +417,21 @@ def cf_string_to_text(ref: int | None) -> str:
     return buffer.value.decode("utf-8", errors="replace") if ok else ""
 
 
+def ax_set_messaging_timeout(element: int, timeout: float = 1.5) -> None:
+    setter = getattr(APP_SERVICES, "AXUIElementSetMessagingTimeout", None)
+    if not setter:
+        return
+    try:
+        setter(ctypes.c_void_p(element), ctypes.c_float(timeout))
+    except Exception:
+        pass
+
+
 def ax_copy_attribute(element: int, name: str) -> int | None:
     key = cf_string(name)
     out = ctypes.c_void_p()
     try:
+        ax_set_messaging_timeout(element)
         err = APP_SERVICES.AXUIElementCopyAttributeValue(
             ctypes.c_void_p(element),
             ctypes.c_void_p(key),
@@ -358,6 +446,7 @@ def ax_set_string_attribute(element: int, name: str, value: str) -> bool:
     key = cf_string(name)
     string_value = cf_string(value)
     try:
+        ax_set_messaging_timeout(element)
         return (
             APP_SERVICES.AXUIElementSetAttributeValue(
                 ctypes.c_void_p(element),
@@ -378,6 +467,7 @@ def cf_boolean(value: bool) -> int:
 def ax_set_bool_attribute(element: int, name: str, value: bool) -> bool:
     key = cf_string(name)
     try:
+        ax_set_messaging_timeout(element)
         return (
             APP_SERVICES.AXUIElementSetAttributeValue(
                 ctypes.c_void_p(element),
@@ -486,6 +576,7 @@ def jhs_ax_window() -> int:
     app = APP_SERVICES.AXUIElementCreateApplication(jhs_process_id())
     if not app:
         raise RuntimeError("无法连接集换社无障碍窗口")
+    ax_set_messaging_timeout(int(app))
     windows = ax_copy_attribute(int(app), "AXWindows")
     if not windows:
         raise RuntimeError("未找到集换社窗口")
@@ -500,13 +591,15 @@ def jhs_ax_window() -> int:
         cf_release(windows)
 
 
-def iter_jhs_ax_elements(max_depth: int = 20, max_nodes: int = 1600):
+def iter_jhs_ax_elements(max_depth: int = 20, max_nodes: int = 1600, max_seconds: float = 8.0):
+    deadline = time.time() + max_seconds
     root = jhs_ax_window()
     queue: list[tuple[int, int]] = [(root, 0)]
     seen = 0
-    while queue and seen < max_nodes:
+    while queue and seen < max_nodes and time.time() < deadline:
         element, depth = queue.pop(0)
         seen += 1
+        ax_set_messaging_timeout(element)
         role = ax_text_attribute(element, "AXRole")
         description = ax_text_attribute(element, "AXDescription")
         value = ax_text_attribute(element, "AXValue")
@@ -527,6 +620,7 @@ def iter_jhs_ax_elements(max_depth: int = 20, max_nodes: int = 1600):
 def ax_press_element(element: int) -> bool:
     action = cf_string("AXPress")
     try:
+        ax_set_messaging_timeout(element)
         return (
             APP_SERVICES.AXUIElementPerformAction(
                 ctypes.c_void_p(element),
@@ -582,6 +676,7 @@ def is_home_search_entry(node: dict[str, Any]) -> bool:
 
 
 def ensure_jhs_app_open() -> None:
+    remember_front_app()
     run_command(["open", "-a", JHS_APP_NAME], timeout=10)
     time.sleep(1.2)
     try:
@@ -590,6 +685,7 @@ def ensure_jhs_app_open() -> None:
         run_command(["open", "-b", "com.jihuanshe.app"], timeout=10)
         time.sleep(1.2)
         run_osascript(f'tell application "{JHS_APP_NAME}" to activate')
+    arrange_jhs_window_low_interruption()
     time.sleep(0.8)
 
 
@@ -971,6 +1067,9 @@ def extract_prices_from_accessibility_text(text: str) -> PriceResult:
 def card_code_search_variants(card_code: str) -> list[str]:
     code = card_code.strip()
     variants = [code]
+    match = re.match(r"^(.+\d+/\d+)\s+[A-Z][A-Z0-9]*(?:\s+[A-Z][A-Z0-9]*)*$", code)
+    if match:
+        variants.append(match.group(1))
     match = re.match(r"^(SV)P-(\d+)$", code, re.I)
     if match:
         variants.append(f"{match.group(1).upper()}-P-{match.group(2)}")
@@ -1166,22 +1265,43 @@ def read_supabase_items(url: str, anon_key: str, table: str, row_id: str) -> lis
     return extract_items(rows[0].get("payload"))
 
 
+def urlopen_with_retries(request_factory: Callable[[], urllib.request.Request], timeout: float = 30, attempts: int = 4):
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return urllib.request.urlopen(request_factory(), timeout=timeout)
+        except urllib.error.HTTPError:
+            raise
+        except (urllib.error.URLError, http.client.RemoteDisconnected, TimeoutError, OSError) as exc:
+            last_error = exc
+            if attempt >= attempts:
+                raise
+            time.sleep(min(2.0 * attempt, 8.0))
+    if last_error:
+        raise last_error
+    raise RuntimeError("Supabase request retry failed without an exception")
+
+
 def write_supabase_items(url: str, anon_key: str, table: str, row_id: str, items: list[dict[str, Any]]) -> None:
     endpoint = f"{url.rstrip('/')}/rest/v1/{table}?id=eq.{row_id}"
     body = json.dumps(
         {"id": row_id, "payload": items, "updated_at": datetime.now().astimezone().isoformat()},
         ensure_ascii=False,
     ).encode("utf-8")
-    req = urllib.request.Request(endpoint, data=body, headers=supabase_headers(anon_key), method="PATCH")
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urlopen_with_retries(
+            lambda: urllib.request.Request(endpoint, data=body, headers=supabase_headers(anon_key), method="PATCH"),
+            timeout=30,
+        ) as resp:
             resp.read()
     except urllib.error.HTTPError as exc:
         if exc.code != 404:
             raise
         upsert_endpoint = f"{url.rstrip('/')}/rest/v1/{table}"
-        req = urllib.request.Request(upsert_endpoint, data=body, headers=supabase_headers(anon_key), method="POST")
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urlopen_with_retries(
+            lambda: urllib.request.Request(upsert_endpoint, data=body, headers=supabase_headers(anon_key), method="POST"),
+            timeout=30,
+        ) as resp:
             resp.read()
 
 
@@ -1195,6 +1315,39 @@ def has_price_value(value: Any) -> bool:
     return value is not None and value != ""
 
 
+def parse_iso_datetime(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def is_recently_updated(item: dict[str, Any], stale_hours: float, now: datetime) -> bool:
+    if stale_hours <= 0:
+        return False
+    updated_at = parse_iso_datetime(item.get("jhsPriceUpdatedAt"))
+    if not updated_at:
+        return False
+    if updated_at.tzinfo is None:
+        updated_at = updated_at.astimezone()
+    return now - updated_at.astimezone(now.tzinfo) < timedelta(hours=stale_hours)
+
+
+def prepare_jhs_for_ui_run() -> None:
+    try:
+        ensure_jhs_app_open()
+        press_escape(3)
+        dismiss_delete_history_alert()
+        open_search_page()
+    except Exception as exc:
+        print(f"启动整理未进入搜索页，继续逐卡处理: {exc}", file=sys.stderr, flush=True)
+
+
 def update_items(
     items: list[dict[str, Any]],
     limit: int,
@@ -1203,13 +1356,21 @@ def update_items(
     max_items: int | None = None,
     only_card_code: str = "",
     only_missing_raw: bool = False,
+    stale_hours: float = 0,
     checkpoint: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
-    checked_at = datetime.now().astimezone().isoformat(timespec="seconds")
+    now = datetime.now().astimezone()
+    checked_at = now.isoformat(timespec="seconds")
     updated = 0
     skipped = 0
     failed = 0
+    stale_skipped = 0
     details: list[dict[str, Any]] = []
+    result_cache: dict[tuple[str, int, str, str, str], PriceResult] = {}
+    cache_hits = 0
+
+    if mode == "ui" and not dry_run and not only_card_code:
+        prepare_jhs_for_ui_run()
 
     attempted = 0
     for item in items:
@@ -1221,6 +1382,10 @@ def update_items(
             continue
         if only_missing_raw and has_price_value(item.get("jhsRawPrice")):
             skipped += 1
+            continue
+        if not only_card_code and not only_missing_raw and is_recently_updated(item, stale_hours, now):
+            skipped += 1
+            stale_skipped += 1
             continue
         if max_items is not None and attempted >= max_items:
             skipped += 1
@@ -1236,11 +1401,18 @@ def update_items(
             file=sys.stderr,
             flush=True,
         )
-        result = (
-            lookup_card_prices_via_ui(card_code, search_code=jhs_search_code, game_label=jhs_game_label)
-            if mode == "ui"
-            else lookup_card_prices(jhs_search_code or card_code, limit=limit)
-        )
+        cache_key = (mode, limit, card_code, jhs_search_code, jhs_game_label)
+        if cache_key in result_cache:
+            result = result_cache[cache_key]
+            cache_hits += 1
+            print("  -> reused: 同次运行已查过该卡，复用价格结果", file=sys.stderr, flush=True)
+        else:
+            result = (
+                lookup_card_prices_via_ui(card_code, search_code=jhs_search_code, game_label=jhs_game_label)
+                if mode == "ui"
+                else lookup_card_prices(jhs_search_code or card_code, limit=limit)
+            )
+            result_cache[cache_key] = result
         if result.raw_price is None and result.psa10_price is None:
             failed += 1
             item["jhsPriceNote"] = result.note or "未更新"
@@ -1287,6 +1459,9 @@ def update_items(
         "dryRun": dry_run,
         "mode": mode,
         "onlyMissingRaw": only_missing_raw,
+        "staleHours": stale_hours,
+        "staleSkipped": stale_skipped,
+        "cacheHits": cache_hits,
         "details": details,
     }
 
@@ -1304,8 +1479,18 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=0, help="UI/cache update maximum matching unsold items; 0 means all")
     parser.add_argument("--card-code", default="", help="Only update one card code, useful for UI-mode testing")
     parser.add_argument("--missing-raw", action="store_true", help="Only update matching unsold items without jhsRawPrice")
+    parser.add_argument(
+        "--stale-hours",
+        type=float,
+        default=float(os.environ.get("JHS_STALE_HOURS", "0") or 0),
+        help="Skip items with jhsPriceUpdatedAt newer than this many hours; 0 means update all matching items",
+    )
+    parser.add_argument("--foreground-ui", action="store_true", help="Keep the Jihuanshe window in its normal foreground size/position")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+
+    global JHS_LOW_INTERRUPTION
+    JHS_LOW_INTERRUPTION = args.mode == "ui" and not args.foreground_ui and not truthy_env("JHS_FOREGROUND_UI")
 
     if args.source == "supabase":
         items = read_supabase_items(args.supabase_url, args.supabase_anon_key, args.table, args.row_id)
@@ -1318,21 +1503,25 @@ def main() -> int:
         else:
             write_local_items(Path(args.local_data), items)
 
-    summary = update_items(
-        items,
-        limit=args.cache_limit,
-        dry_run=args.dry_run,
-        mode=args.mode,
-        max_items=args.limit if args.limit > 0 else None,
-        only_card_code=args.card_code.strip(),
-        only_missing_raw=args.missing_raw,
-        checkpoint=None if args.dry_run else checkpoint_items,
-    )
-    if not args.dry_run:
-        if args.source == "supabase":
-            write_supabase_items(args.supabase_url, args.supabase_anon_key, args.table, args.row_id, items)
-        else:
-            write_local_items(Path(args.local_data), items)
+    try:
+        summary = update_items(
+            items,
+            limit=args.cache_limit,
+            dry_run=args.dry_run,
+            mode=args.mode,
+            max_items=args.limit if args.limit > 0 else None,
+            only_card_code=args.card_code.strip(),
+            only_missing_raw=args.missing_raw,
+            stale_hours=args.stale_hours,
+            checkpoint=None if args.dry_run else checkpoint_items,
+        )
+        if not args.dry_run:
+            if args.source == "supabase":
+                write_supabase_items(args.supabase_url, args.supabase_anon_key, args.table, args.row_id, items)
+            else:
+                write_local_items(Path(args.local_data), items)
+    finally:
+        restore_front_app()
 
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return 0
