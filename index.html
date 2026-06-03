@@ -813,6 +813,7 @@ const INITIAL_DATA = [{"id": 1, "name": "胡地", "unitPrice": 37, "qty": 1, "co
 const STORAGE_KEY = 'kajia_card_data';
 const OLD_CARD_STORAGE_KEY = 'kajia_old_card_data';
 const SUPABASE_CONFIG_KEY = 'kajia_supabase_config';
+const AI_CONFIG_KEY = 'kajia_ai_api_config';
 const DATA_URL_PREFIX = 'data:';
 const ACCESS_SESSION_KEY = 'kajia_access_granted';
 const ACCESS_PASSWORD_HASH = '1549c7def3809f8916e748ac0b005fb002f912cd03a60bbd7919e40de0576c5f';
@@ -831,6 +832,14 @@ const SUPABASE_DEFAULT_CONFIG = {
   table: 'card_app_state',
   rowId: 'main',
   bucket: 'card-images'
+};
+const AI_DEFAULT_CONFIG = {
+  apiKey: '',
+  apiUrl: 'http://43.155.156.14:8080/v1/chat/completions',
+  model: 'gpt-5.5',
+  authHeader: 'Authorization',
+  authScheme: 'Bearer',
+  useJsonSchema: false
 };
 async function sha256Hex(value) {
   const input = new TextEncoder().encode(String(value || ''));
@@ -1207,6 +1216,37 @@ function clearSupabaseConfig() {
 function hasSupabaseCredentials(config) {
   return Boolean(config?.url && config?.anonKey);
 }
+function normalizeAiConfig(raw) {
+  const config = raw && typeof raw === 'object' ? raw : {};
+  return {
+    apiKey: String(config.apiKey || '').trim(),
+    apiUrl: String(config.apiUrl || AI_DEFAULT_CONFIG.apiUrl).trim() || AI_DEFAULT_CONFIG.apiUrl,
+    model: String(config.model || AI_DEFAULT_CONFIG.model).trim() || AI_DEFAULT_CONFIG.model,
+    authHeader: String(config.authHeader || AI_DEFAULT_CONFIG.authHeader).trim() || AI_DEFAULT_CONFIG.authHeader,
+    authScheme: String(config.authScheme === undefined ? AI_DEFAULT_CONFIG.authScheme : config.authScheme).trim(),
+    useJsonSchema: Boolean(config.useJsonSchema)
+  };
+}
+function readAiConfig() {
+  try {
+    const saved = localStorage.getItem(AI_CONFIG_KEY);
+    if (!saved) return { ...AI_DEFAULT_CONFIG };
+    return normalizeAiConfig(JSON.parse(saved));
+  } catch (error) {
+    return { ...AI_DEFAULT_CONFIG };
+  }
+}
+function saveAiConfig(config) {
+  const normalized = normalizeAiConfig(config);
+  localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(normalized));
+  return normalized;
+}
+function clearAiConfig() {
+  localStorage.removeItem(AI_CONFIG_KEY);
+}
+function hasAiCredentials(config) {
+  return Boolean(config?.apiKey && config?.apiUrl && config?.model);
+}
 function createSupabaseBrowserClient(config) {
   if (!window.supabase || typeof window.supabase.createClient !== 'function') {
     throw new Error('Supabase SDK 加载失败，请刷新页面重试');
@@ -1387,6 +1427,213 @@ function parseJsonMaybe(text) {
     return null;
   }
 }
+function stripMarkdownJsonFence(text) {
+  const raw = String(text || '').trim();
+  if (!raw.startsWith('```')) return raw;
+  return raw
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+}
+function extractJsonObjectText(text) {
+  const cleaned = stripMarkdownJsonFence(text);
+  if (cleaned.startsWith('{')) return cleaned;
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start >= 0 && end > start) {
+    return cleaned.slice(start, end + 1);
+  }
+  return cleaned;
+}
+function normalizeAiExtractedItem(item) {
+  const source = item && typeof item === 'object' ? item : {};
+  const priceValue = source.unitPrice;
+  const parsedPrice = priceValue === null || priceValue === undefined || priceValue === ''
+    ? null
+    : parseFloat(priceValue);
+  const parsedQty = parseInt(source.qty, 10);
+  const unitPrice = Number.isFinite(parsedPrice) ? round2(parsedPrice) : null;
+  const qty = Number.isFinite(parsedQty) && parsedQty > 0 ? parsedQty : 1;
+  return {
+    name: String(source.name || '').trim(),
+    cardCode: String(source.cardCode || '').trim(),
+    unitPrice,
+    qty,
+    note: String(source.note || '').trim(),
+    sourceText: String(source.sourceText || '').trim(),
+    status: '未售出',
+    source: '截图识别',
+    sells: [],
+    profit: null,
+    cost: unitPrice === null ? 0 : round2(unitPrice * qty)
+  };
+}
+function normalizeAiExtractedItems(items) {
+  return (Array.isArray(items) ? items : [])
+    .map(normalizeAiExtractedItem)
+    .filter(item => item.name);
+}
+function parseAiItemsFromText(text) {
+  const parsed = parseJsonMaybe(extractJsonObjectText(text));
+  if (!parsed || !Array.isArray(parsed.items)) {
+    throw new Error('AI 返回内容无法解析为商品 JSON');
+  }
+  return normalizeAiExtractedItems(parsed.items);
+}
+function buildAiScreenshotMessages(imageDataUrl) {
+  return [
+    {
+      role: 'system',
+      content: [
+        {
+          type: 'text',
+          text: '你是一个电商截图商品提取助手。请只提取截图里真实存在的商品行，按从上到下顺序输出。不要编造。不要解释。不要输出 Markdown。'
+        }
+      ]
+    },
+    {
+      role: 'user',
+      content: [
+        {
+          type: 'text',
+          text: [
+            '请识别这张商品列表截图，并输出严格 JSON。',
+            '返回格式必须是 {"items":[...]}。',
+            '每个 item 包含字段：name, cardCode, unitPrice, qty, note, sourceText。',
+            '规则：',
+            '1. name 是商品名，例如 猛雷鼓ex、皮卡丘。',
+            '2. cardCode 是截图里显示的卡牌编号，尽量保持原样，例如 CSV7C-227/204、CSYC-005/011、S-P-208。',
+            '3. unitPrice 只填数字，不要带 ¥。',
+            '4. qty 如果截图有 x2 这种数量就填 2，没有就填 1。',
+            '5. note 只放附加信息，例如 SR、无标记、PSA10、流通品相。',
+            '6. sourceText 放这一条商品中你最关键的原始识别文本，便于人工复核。',
+            '7. 如果某个字段无法判断，name 之外的字段可以留空字符串或 null，但不要瞎猜。',
+            '8. 不要把评级卡编号当成 cardCode。',
+            '9. 不要把价格拼进 name。'
+          ].join('\n')
+        },
+        {
+          type: 'image_url',
+          image_url: {
+            url: imageDataUrl,
+            detail: 'high'
+          }
+        }
+      ]
+    }
+  ];
+}
+function buildAiScreenshotRequestBody(config, imageDataUrl) {
+  const body = {
+    model: config.model,
+    temperature: 0,
+    messages: buildAiScreenshotMessages(imageDataUrl)
+  };
+
+  if (config.useJsonSchema) {
+    body.response_format = {
+      type: 'json_schema',
+      json_schema: {
+        name: 'card_screenshot_extract',
+        strict: true,
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            items: {
+              type: 'array',
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                properties: {
+                  name: { type: 'string' },
+                  cardCode: { type: 'string' },
+                  unitPrice: { anyOf: [{ type: 'number' }, { type: 'null' }] },
+                  qty: { type: 'integer' },
+                  note: { type: 'string' },
+                  sourceText: { type: 'string' }
+                },
+                required: ['name', 'cardCode', 'unitPrice', 'qty', 'note', 'sourceText']
+              }
+            }
+          },
+          required: ['items']
+        }
+      }
+    };
+  }
+
+  return body;
+}
+function normalizeAiApiUrl(apiUrl) {
+  const raw = String(apiUrl || '').trim().replace(/\/+$/, '');
+  if (!raw) return raw;
+  if (/\/chat\/completions$/i.test(raw) || /\/responses$/i.test(raw)) return raw;
+  return `${raw}/chat/completions`;
+}
+function extractAssistantTextFromAiResponse(data) {
+  const choice = Array.isArray(data?.choices) ? data.choices[0] : null;
+  const message = choice?.message || null;
+  if (typeof message?.content === 'string') return message.content;
+  if (Array.isArray(message?.content)) {
+    const textParts = message.content
+      .map(part => {
+        if (typeof part === 'string') return part;
+        return typeof part?.text === 'string' ? part.text : '';
+      })
+      .filter(Boolean);
+    return textParts.join('\n');
+  }
+  if (typeof data?.output_text === 'string') return data.output_text;
+  if (Array.isArray(data?.output)) {
+    const outputText = data.output
+      .flatMap(item => Array.isArray(item?.content) ? item.content : [])
+      .map(part => typeof part?.text === 'string' ? part.text : '')
+      .filter(Boolean)
+      .join('\n');
+    if (outputText) return outputText;
+  }
+  return '';
+}
+function getDirectAiErrorMessage(error) {
+  const message = String(error?.message || error || '').trim();
+  if (/Failed to fetch|Load failed|NetworkError|CORS/i.test(message)) {
+    return '直连 AI API 被浏览器或 CORS 拦截，请让 API 网关允许当前页面来源（file:// 通常是 Origin null），或改用 Supabase 模式。';
+  }
+  return message || '直连 AI API 调用失败';
+}
+async function extractScreenshotItemsViaDirectApi(config, imageDataUrl) {
+  const headers = {
+    'Content-Type': 'application/json'
+  };
+  headers[config.authHeader || 'Authorization'] = config.authScheme
+    ? `${config.authScheme} ${config.apiKey}`
+    : config.apiKey;
+
+  const response = await fetch(normalizeAiApiUrl(config.apiUrl), {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(buildAiScreenshotRequestBody(config, imageDataUrl))
+  });
+  const text = await response.text();
+  const data = parseJsonMaybe(text);
+  if (!response.ok) {
+    const message = data?.error?.message || data?.error || data?.message || text || `直连 AI API 调用失败 (${response.status})`;
+    throw new Error(message);
+  }
+
+  const assistantText = extractAssistantTextFromAiResponse(data);
+  if (!assistantText) {
+    throw new Error('AI 没有返回可解析内容');
+  }
+
+  return {
+    items: parseAiItemsFromText(assistantText),
+    rawText: assistantText,
+    model: data?.model || config.model,
+    source: '直连API'
+  };
+}
 function compressImageDataUrl(dataUrl, options = {}) {
   const maxDimension = options.maxDimension || 1600;
   const quality = options.quality || 0.86;
@@ -1424,10 +1671,10 @@ function compressImageDataUrl(dataUrl, options = {}) {
     img.src = dataUrl;
   });
 }
-async function extractScreenshotItemsViaAi(imageDataUrl) {
+async function extractScreenshotItemsViaSupabase(imageDataUrl) {
   const config = readSupabaseConfig();
   if (!hasSupabaseCredentials(config)) {
-    throw new Error('云端未配置，暂时无法使用 AI 识别');
+    throw new Error('Supabase 未配置');
   }
   const response = await fetch(buildSupabaseFunctionUrl(config, SUPABASE_SCREENSHOT_AI_FUNCTION), {
     method: 'POST',
@@ -1445,10 +1692,43 @@ async function extractScreenshotItemsViaAi(imageDataUrl) {
     throw new Error(message);
   }
   return {
-    items: Array.isArray(data?.items) ? data.items : [],
+    items: normalizeAiExtractedItems(data?.items),
     rawText: data?.rawText || '',
-    model: data?.model || ''
+    model: data?.model || '',
+    source: 'Supabase'
   };
+}
+async function extractScreenshotItemsViaAi(imageDataUrl) {
+  const directConfig = readAiConfig();
+  const supabaseConfig = readSupabaseConfig();
+  const canUseDirect = hasAiCredentials(directConfig);
+  const canUseSupabase = hasSupabaseCredentials(supabaseConfig);
+
+  if (canUseDirect) {
+    try {
+      return await extractScreenshotItemsViaDirectApi(directConfig, imageDataUrl);
+    } catch (directError) {
+      if (!canUseSupabase) {
+        throw new Error(getDirectAiErrorMessage(directError));
+      }
+      try {
+        const fallbackResult = await extractScreenshotItemsViaSupabase(imageDataUrl);
+        return {
+          ...fallbackResult,
+          source: 'Supabase（直连失败后兜底）',
+          rawText: fallbackResult.rawText || `直连失败：${getDirectAiErrorMessage(directError)}`
+        };
+      } catch (supabaseError) {
+        throw new Error(`直连失败：${getDirectAiErrorMessage(directError)}；Supabase 也失败：${supabaseError?.message || '未知错误'}`);
+      }
+    }
+  }
+
+  if (canUseSupabase) {
+    return await extractScreenshotItemsViaSupabase(imageDataUrl);
+  }
+
+  throw new Error('AI 识别未配置：请在 AI配置里填写直连 API，或在云端设置里配置 Supabase。');
 }
 async function fetchPayloadFromSupabase(client, config) {
   const { data, error } = await client
@@ -2666,6 +2946,120 @@ function EditModal({ item, onSave, onClose, onToast }) {
   );
 }
 
+function AiConfigModal({
+  config,
+  onChange,
+  onSave,
+  onReset,
+  onClose
+}) {
+  const configured = hasAiCredentials(config);
+  return (
+    <ModalPortal>
+      <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+        <div className="modal" style={{maxWidth: 680}}>
+          <div className="modal-header">
+            <div className="modal-title">AI 识别配置</div>
+            <button className="modal-close" onClick={onClose}>×</button>
+          </div>
+          <div className="modal-body">
+            <div className="profit-summary" style={{marginBottom: 18}}>
+              <div className="profit-row">
+                <span>当前模式</span>
+                <span style={{color: configured ? 'var(--green)' : 'var(--text-2)'}}>
+                  {configured ? '优先直连 API' : '未配置直连，使用 Supabase 兜底'}
+                </span>
+              </div>
+              <div className="profit-row">
+                <span>模型</span>
+                <span>{config.model || '未填写'}</span>
+              </div>
+            </div>
+
+            <div className="modal-section-title">直连 API</div>
+            <div className="form-group">
+              <label className="form-label">API URL</label>
+              <input
+                className="form-input"
+                value={config.apiUrl}
+                onChange={e => onChange('apiUrl', e.target.value)}
+                placeholder="http://43.155.156.14:8080/v1/chat/completions"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">API Key</label>
+              <textarea
+                className="form-input"
+                value={config.apiKey}
+                onChange={e => onChange('apiKey', e.target.value)}
+                placeholder="粘贴你的 API Key"
+                style={{minHeight: 96, resize: 'vertical'}}
+              />
+            </div>
+            <div className="form-row" style={{gridTemplateColumns:'1.2fr 1fr'}}>
+              <div className="form-group">
+                <label className="form-label">AI_MODEL</label>
+                <input
+                  className="form-input"
+                  value={config.model}
+                  onChange={e => onChange('model', e.target.value)}
+                  placeholder="gpt-5.5"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">JSON Schema</label>
+                <label className={`form-check-option ${config.useJsonSchema ? 'active' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={!!config.useJsonSchema}
+                    onChange={e => onChange('useJsonSchema', e.target.checked)}
+                  />
+                  <span>启用结构化输出</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="modal-section-title" style={{marginTop: 8}}>鉴权</div>
+            <div className="form-row" style={{gridTemplateColumns:'1fr 1fr'}}>
+              <div className="form-group">
+                <label className="form-label">Auth Header</label>
+                <input
+                  className="form-input"
+                  value={config.authHeader}
+                  onChange={e => onChange('authHeader', e.target.value)}
+                  placeholder="Authorization"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Auth Scheme</label>
+                <input
+                  className="form-input"
+                  value={config.authScheme}
+                  onChange={e => onChange('authScheme', e.target.value)}
+                  placeholder="Bearer"
+                />
+              </div>
+            </div>
+
+            <div style={{fontSize:13, color:'var(--text-2)', lineHeight:1.7}}>
+              <div>保存后，“AI识别”会优先调用这里的 OpenAI 兼容接口；没有填写 API Key 时，会继续使用 Supabase Edge Function。</div>
+              <div>如果页面用 <code>file://</code> 打开，直连接口需要允许浏览器 CORS（通常是 <code>Origin: null</code>），否则会自动尝试 Supabase 兜底。</div>
+              <div>API Key 只保存在当前浏览器的 localStorage，请不要在公共电脑上保存。</div>
+            </div>
+          </div>
+          <div className="modal-footer" style={{justifyContent:'space-between'}}>
+            <button className="btn btn-danger" onClick={onReset}>清空直连配置</button>
+            <div style={{display:'flex', gap:10}}>
+              <button className="btn btn-secondary" onClick={onClose}>取消</button>
+              <button className="btn btn-primary" onClick={onSave}>保存配置</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </ModalPortal>
+  );
+}
+
 function ScreenshotImportModal({ onImport, onClose, showToast }) {
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
@@ -2675,6 +3069,8 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
   const [drafts, setDrafts] = useState([]);
   const [lastMethod, setLastMethod] = useState('');
   const [recognizeError, setRecognizeError] = useState('');
+  const [showAiConfig, setShowAiConfig] = useState(false);
+  const [aiForm, setAiForm] = useState(() => readAiConfig());
 
   function updateDraft(index, field, value) {
     setDrafts(prev => prev.map((item, idx) => {
@@ -2691,6 +3087,24 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
 
   function removeDraft(index) {
     setDrafts(prev => prev.filter((_, idx) => idx !== index));
+  }
+
+  function updateAiForm(field, value) {
+    setAiForm(prev => normalizeAiConfig({ ...prev, [field]: value }));
+  }
+
+  function handleSaveAiConfig() {
+    const saved = saveAiConfig(aiForm);
+    setAiForm(saved);
+    setShowAiConfig(false);
+    showToast(hasAiCredentials(saved) ? '已保存 AI 直连配置' : '已保存配置；未填写 Key 时会使用 Supabase');
+  }
+
+  function handleResetAiConfig() {
+    clearAiConfig();
+    const resetConfig = { ...AI_DEFAULT_CONFIG };
+    setAiForm(resetConfig);
+    showToast('已清空 AI 直连配置');
   }
 
   function handleFileChange(selectedFile) {
@@ -2820,6 +3234,7 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
       const enriched = await enrichRecognizedItemsWithImages(normalized);
       setDrafts(enriched);
       setRawText(result.rawText || '');
+      setLastMethod(result.source ? `AI识别 - ${result.source}` : 'AI识别');
       if (enriched.length === 0) {
         showToast('AI 没有识别出可导入商品，请换一张更清晰的截图试试');
       } else {
@@ -2877,6 +3292,9 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
                 </button>
                 <button className="btn btn-secondary" onClick={handleRecognizeLocal} disabled={!file || loading}>
                   {loading && lastMethod === '本地OCR' ? 'OCR 识别中...' : '本地OCR'}
+                </button>
+                <button className="btn btn-secondary" onClick={() => setShowAiConfig(true)} disabled={loading}>
+                  AI配置
                 </button>
                 <label className="btn btn-secondary" style={{cursor:'pointer'}}>
                   重新选图
@@ -2936,7 +3354,7 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
 
           {rawText && (
             <>
-              <div className="modal-section-title" style={{marginTop:20}}>{lastMethod === 'AI识别' ? 'AI 原始输出' : 'OCR 原始文本'}</div>
+              <div className="modal-section-title" style={{marginTop:20}}>{lastMethod.startsWith('AI识别') ? 'AI 原始输出' : 'OCR 原始文本'}</div>
               <textarea
                 className="form-input"
                 style={{minHeight:140, resize:'vertical', fontFamily:'var(--mono, monospace)'}}
@@ -2952,6 +3370,15 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
           </div>
         </div>
       </div>
+      {showAiConfig && (
+        <AiConfigModal
+          config={aiForm}
+          onChange={updateAiForm}
+          onSave={handleSaveAiConfig}
+          onReset={handleResetAiConfig}
+          onClose={() => setShowAiConfig(false)}
+        />
+      )}
     </ModalPortal>
   );
 }
