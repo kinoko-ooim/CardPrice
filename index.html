@@ -1247,6 +1247,12 @@ function clearAiConfig() {
 function hasAiCredentials(config) {
   return Boolean(config?.apiKey && config?.apiUrl && config?.model);
 }
+function maskSecret(value) {
+  const secret = String(value || '').trim();
+  if (!secret) return '未填写';
+  if (secret.length <= 8) return '••••';
+  return `${secret.slice(0, 4)}••••${secret.slice(-4)}`;
+}
 function createSupabaseBrowserClient(config) {
   if (!window.supabase || typeof window.supabase.createClient !== 'function') {
     throw new Error('Supabase SDK 加载失败，请刷新页面重试');
@@ -1632,6 +1638,42 @@ async function extractScreenshotItemsViaDirectApi(config, imageDataUrl) {
     rawText: assistantText,
     model: data?.model || config.model,
     source: '直连API'
+  };
+}
+async function testDirectAiConnection(config) {
+  if (!hasAiCredentials(config)) {
+    throw new Error('请先填写 API URL、API Key 和 AI_MODEL');
+  }
+  const headers = {
+    'Content-Type': 'application/json'
+  };
+  headers[config.authHeader || 'Authorization'] = config.authScheme
+    ? `${config.authScheme} ${config.apiKey}`
+    : config.apiKey;
+
+  const response = await fetch(normalizeAiApiUrl(config.apiUrl), {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      model: config.model,
+      temperature: 0,
+      messages: [
+        { role: 'system', content: 'Reply with OK only.' },
+        { role: 'user', content: 'ping' }
+      ]
+    })
+  });
+  const text = await response.text();
+  const data = parseJsonMaybe(text);
+  if (!response.ok) {
+    const message = data?.error?.message || data?.error || data?.message || text || `AI 提供方请求失败 (${response.status})`;
+    throw new Error(message);
+  }
+  const assistantText = extractAssistantTextFromAiResponse(data);
+  return {
+    ok: true,
+    model: data?.model || config.model,
+    responseText: assistantText || 'OK'
   };
 }
 function compressImageDataUrl(dataUrl, options = {}) {
@@ -2948,9 +2990,14 @@ function EditModal({ item, onSave, onClose, onToast }) {
 
 function AiConfigModal({
   config,
+  testing,
+  testStatus,
+  showApiKey,
   onChange,
   onSave,
   onReset,
+  onTest,
+  onToggleShowApiKey,
   onClose
 }) {
   const configured = hasAiCredentials(config);
@@ -2988,13 +3035,24 @@ function AiConfigModal({
             </div>
             <div className="form-group">
               <label className="form-label">API Key</label>
-              <textarea
-                className="form-input"
-                value={config.apiKey}
-                onChange={e => onChange('apiKey', e.target.value)}
-                placeholder="粘贴你的 API Key"
-                style={{minHeight: 96, resize: 'vertical'}}
-              />
+              <div style={{display:'flex', gap:8, alignItems:'stretch'}}>
+                <input
+                  className="form-input"
+                  type={showApiKey ? 'text' : 'password'}
+                  value={config.apiKey}
+                  onChange={e => onChange('apiKey', e.target.value)}
+                  placeholder="粘贴你的 API Key"
+                  autoComplete="off"
+                  spellCheck={false}
+                  style={{fontFamily:'var(--mono-font)', flex:1}}
+                />
+                <button className="btn btn-secondary" type="button" onClick={onToggleShowApiKey}>
+                  {showApiKey ? '隐藏' : '显示'}
+                </button>
+              </div>
+              <div style={{marginTop:6, fontSize:12, color:'var(--text-3)'}}>
+                当前保存显示：<span style={{fontFamily:'var(--mono-font)', color:'var(--text-2)'}}>{maskSecret(config.apiKey)}</span>
+              </div>
             </div>
             <div className="form-row" style={{gridTemplateColumns:'1.2fr 1fr'}}>
               <div className="form-group">
@@ -3046,11 +3104,24 @@ function AiConfigModal({
               <div>如果页面用 <code>file://</code> 打开，直连接口需要允许浏览器 CORS（通常是 <code>Origin: null</code>），否则会自动尝试 Supabase 兜底。</div>
               <div>API Key 只保存在当前浏览器的 localStorage，请不要在公共电脑上保存。</div>
             </div>
+            {testStatus && (
+              <div
+                className={testStatus.type === 'ok' ? '' : 'auth-error'}
+                style={testStatus.type === 'ok'
+                  ? {marginTop:12, padding:'10px 12px', borderRadius:10, background:'rgba(62,207,142,0.1)', border:'1px solid rgba(62,207,142,0.28)', color:'var(--green)', fontSize:13, fontWeight:600}
+                  : {marginTop:12}}
+              >
+                {testStatus.message}
+              </div>
+            )}
           </div>
           <div className="modal-footer" style={{justifyContent:'space-between'}}>
             <button className="btn btn-danger" onClick={onReset}>清空直连配置</button>
             <div style={{display:'flex', gap:10}}>
               <button className="btn btn-secondary" onClick={onClose}>取消</button>
+              <button className="btn btn-secondary" onClick={onTest} disabled={testing}>
+                {testing ? '测试中...' : '测试连接'}
+              </button>
               <button className="btn btn-primary" onClick={onSave}>保存配置</button>
             </div>
           </div>
@@ -3071,6 +3142,9 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
   const [recognizeError, setRecognizeError] = useState('');
   const [showAiConfig, setShowAiConfig] = useState(false);
   const [aiForm, setAiForm] = useState(() => readAiConfig());
+  const [showAiKey, setShowAiKey] = useState(false);
+  const [aiConfigTesting, setAiConfigTesting] = useState(false);
+  const [aiConfigTestStatus, setAiConfigTestStatus] = useState(null);
 
   function updateDraft(index, field, value) {
     setDrafts(prev => prev.map((item, idx) => {
@@ -3091,11 +3165,13 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
 
   function updateAiForm(field, value) {
     setAiForm(prev => normalizeAiConfig({ ...prev, [field]: value }));
+    setAiConfigTestStatus(null);
   }
 
   function handleSaveAiConfig() {
     const saved = saveAiConfig(aiForm);
     setAiForm(saved);
+    setShowAiKey(false);
     setShowAiConfig(false);
     showToast(hasAiCredentials(saved) ? '已保存 AI 直连配置' : '已保存配置；未填写 Key 时会使用 Supabase');
   }
@@ -3104,7 +3180,32 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
     clearAiConfig();
     const resetConfig = { ...AI_DEFAULT_CONFIG };
     setAiForm(resetConfig);
+    setShowAiKey(false);
+    setAiConfigTestStatus(null);
     showToast('已清空 AI 直连配置');
+  }
+
+  async function handleTestAiConfig() {
+    const config = normalizeAiConfig(aiForm);
+    setAiConfigTesting(true);
+    setAiConfigTestStatus(null);
+    try {
+      const result = await testDirectAiConnection(config);
+      setAiConfigTestStatus({
+        type: 'ok',
+        message: `连接成功：${result.model || config.model} 返回 ${String(result.responseText || 'OK').slice(0, 60)}`
+      });
+      showToast('AI API 测试连接成功');
+    } catch (error) {
+      const message = getDirectAiErrorMessage(error);
+      setAiConfigTestStatus({
+        type: 'error',
+        message: `连接失败：${message}`
+      });
+      showToast(`AI API 连接失败：${message}`);
+    } finally {
+      setAiConfigTesting(false);
+    }
   }
 
   function handleFileChange(selectedFile) {
@@ -3373,9 +3474,14 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
       {showAiConfig && (
         <AiConfigModal
           config={aiForm}
+          testing={aiConfigTesting}
+          testStatus={aiConfigTestStatus}
+          showApiKey={showAiKey}
           onChange={updateAiForm}
           onSave={handleSaveAiConfig}
           onReset={handleResetAiConfig}
+          onTest={handleTestAiConfig}
+          onToggleShowApiKey={() => setShowAiKey(prev => !prev)}
           onClose={() => setShowAiConfig(false)}
         />
       )}

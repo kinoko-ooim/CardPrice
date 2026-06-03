@@ -37,6 +37,7 @@
 - 页面直接用 `file://` 打开时，如果浏览器禁止 `sessionStorage`，密码验证会自动退回到当前页面内存状态，不影响进入后台。
 - “截图识别新增 -> AI识别”兼容两种接入方式：如果在弹窗里的“AI配置”保存了 OpenAI 兼容直连 API，会优先直连识别；没有直连配置时，会继续使用 Supabase Edge Function `card-screenshot-extract-v1`。
 - 直连 API 配置保存在当前浏览器 `localStorage`，默认示例为 `http://43.155.156.14:8080/v1/chat/completions`、模型 `gpt-5.5`、`AI_USE_JSON_SCHEMA=false`。如果页面通过 `file://` 打开，API 网关需要允许浏览器 CORS（常见为 `Origin: null`），否则页面会提示直连被拦截并尝试 Supabase 兜底。
+- “AI配置”里的 API Key 输入框默认隐藏，保存状态只显示打码摘要；配置弹窗提供“测试连接”按钮，会用轻量文本请求检查直连 API 是否可用，并显示成功、401/403 或 CORS 拦截等结果。
 - Supabase 模式仍然需要在 Edge Function Secrets 里配置 `AI_API_KEY`/`AI_MODEL` 等变量；如果 AI 提供方返回 401/403/429 等错误，页面会在弹窗里保留失败原因，方便检查 API Key、额度、模型权限和接口地址。
 
 ## 常用命令
