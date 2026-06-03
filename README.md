@@ -35,6 +35,7 @@
 - 表格“单价”下方会显示单价与参考价的差值：普通卡对比“流通品价”，勾选 `PSA10` 的卡对比“PSA10价”。
 - CSV 导出会包含“是否PSA10”列，方便备份和二次整理。
 - 页面直接用 `file://` 打开时，如果浏览器禁止 `sessionStorage`，密码验证会自动退回到当前页面内存状态，不影响进入后台。
+- “截图识别新增 -> AI识别”依赖 Supabase Edge Function `card-screenshot-extract-v1` 和 Edge Function Secrets 里的 AI Key；如果 AI 提供方返回 401/403/429 等错误，页面会在弹窗里保留失败原因，可以先检查 API Key、额度、模型权限和 `AI_API_URL`/`AI_MODEL` 配置。
 
 ## 常用命令
 

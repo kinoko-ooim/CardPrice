@@ -1377,17 +1377,72 @@ async function lookupCardImageViaEdgeFunction(cardCode) {
     throw new Error(lastError?.message || collectorError?.message || '云函数查图失败');
   }
 }
+function buildSupabaseFunctionUrl(config, functionName) {
+  return `${String(config.url || '').replace(/\/+$/, '')}/functions/v1/${functionName}`;
+}
+function parseJsonMaybe(text) {
+  try {
+    return JSON.parse(text);
+  } catch (_error) {
+    return null;
+  }
+}
+function compressImageDataUrl(dataUrl, options = {}) {
+  const maxDimension = options.maxDimension || 1600;
+  const quality = options.quality || 0.86;
+  return new Promise(resolve => {
+    if (!/^data:image\//.test(String(dataUrl || ''))) {
+      resolve(dataUrl);
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      const width = img.naturalWidth || img.width;
+      const height = img.naturalHeight || img.height;
+      if (!width || !height) {
+        resolve(dataUrl);
+        return;
+      }
+
+      const scale = Math.min(1, maxDimension / Math.max(width, height));
+      const targetWidth = Math.max(1, Math.round(width * scale));
+      const targetHeight = Math.max(1, Math.round(height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(dataUrl);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+      const compressed = canvas.toDataURL('image/jpeg', quality);
+      resolve(compressed && compressed.length < dataUrl.length ? compressed : dataUrl);
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
 async function extractScreenshotItemsViaAi(imageDataUrl) {
   const config = readSupabaseConfig();
   if (!hasSupabaseCredentials(config)) {
     throw new Error('云端未配置，暂时无法使用 AI 识别');
   }
-  const client = createSupabaseBrowserClient(config);
-  const { data, error } = await client.functions.invoke(SUPABASE_SCREENSHOT_AI_FUNCTION, {
-    body: { imageDataUrl }
+  const response = await fetch(buildSupabaseFunctionUrl(config, SUPABASE_SCREENSHOT_AI_FUNCTION), {
+    method: 'POST',
+    headers: {
+      apikey: config.anonKey,
+      Authorization: `Bearer ${config.anonKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ imageDataUrl })
   });
-  if (error) {
-    throw new Error(error.message || 'AI 云函数调用失败');
+  const text = await response.text();
+  const data = parseJsonMaybe(text);
+  if (!response.ok) {
+    const message = data?.error || data?.message || text || `AI 云函数调用失败 (${response.status})`;
+    throw new Error(message);
   }
   return {
     items: Array.isArray(data?.items) ? data.items : [],
@@ -2619,6 +2674,7 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
   const [rawText, setRawText] = useState('');
   const [drafts, setDrafts] = useState([]);
   const [lastMethod, setLastMethod] = useState('');
+  const [recognizeError, setRecognizeError] = useState('');
 
   function updateDraft(index, field, value) {
     setDrafts(prev => prev.map((item, idx) => {
@@ -2643,6 +2699,7 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
     setRawText('');
     setDrafts([]);
     setLastMethod('');
+    setRecognizeError('');
     const reader = new FileReader();
     reader.onload = ev => setPreviewUrl(String(ev.target?.result || ''));
     reader.readAsDataURL(selectedFile);
@@ -2707,6 +2764,7 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
     setProgressText('正在识别文字...');
     setRawText('');
     setDrafts([]);
+    setRecognizeError('');
 
     try {
       const result = await window.Tesseract.recognize(file, 'chi_sim+eng', {
@@ -2733,6 +2791,7 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
       }
     } catch (error) {
       console.error('截图识别失败', error);
+      setRecognizeError(error?.message || '截图识别失败');
       showToast(error?.message || '截图识别失败');
     } finally {
       setLoading(false);
@@ -2748,12 +2807,15 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
 
     setLoading(true);
     setLastMethod('AI识别');
-    setProgressText('正在调用 AI 识别截图...');
+    setProgressText('正在压缩截图...');
     setRawText('');
     setDrafts([]);
+    setRecognizeError('');
 
     try {
-      const result = await extractScreenshotItemsViaAi(previewUrl);
+      const imageForAi = await compressImageDataUrl(previewUrl);
+      setProgressText('正在调用 AI 识别截图...');
+      const result = await extractScreenshotItemsViaAi(imageForAi);
       const normalized = normalizeRecognizedDrafts(result.items || []);
       const enriched = await enrichRecognizedItemsWithImages(normalized);
       setDrafts(enriched);
@@ -2765,6 +2827,7 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
       }
     } catch (error) {
       console.error('AI 截图识别失败', error);
+      setRecognizeError(error?.message || 'AI 截图识别失败');
       showToast(error?.message || 'AI 截图识别失败');
     } finally {
       setLoading(false);
@@ -2822,6 +2885,11 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
               </div>
               {progressText && (
                 <div style={{marginTop:10, fontSize:12, color:'var(--primary)', fontWeight:700}}>{progressText}</div>
+              )}
+              {recognizeError && (
+                <div className="auth-error" style={{marginTop:12}}>
+                  {recognizeError}
+                </div>
               )}
             </div>
           </div>
