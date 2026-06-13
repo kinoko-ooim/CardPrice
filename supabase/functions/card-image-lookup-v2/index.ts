@@ -10,6 +10,33 @@ const TCGCOLLECTOR_SETS_URL =
 const TCGCOLLECTOR_SEARCH_URL =
   "https://www.tcgcollector.com/cards/jp?cardSource=inCardVariant&releaseDateOrder=newToOld&displayAs=images&cardSearch={query}";
 const TCG_MIK_URL = "https://tcg.mik.moe/static/img/{set_code}/{card_num}.png";
+const LOCAL_SET_NAME_MAP = {
+  SV1S: "Scarlet ex",
+  SV1V: "Violet ex",
+  SV1A: "Triplet Beat",
+  SV2D: "Clay Burst",
+  SV2P: "Snow Hazard",
+  SV2A: "Pokemon Card 151",
+  SV3: "Ruler of the Black Flame",
+  SV3A: "Raging Surf",
+  SV4K: "Ancient Roar",
+  SV4M: "Future Flash",
+  SV4A: "Shiny Treasure ex",
+  SV5K: "Wild Force",
+  SV5M: "Cyber Judge",
+  SV5A: "Crimson Haze",
+  SV6: "Mask of Change",
+  SV6A: "Night Wanderer",
+  SV7: "Stellar Miracle",
+  SV7A: "Paradise Dragona",
+  SV8: "Super Electric Breaker",
+  SV8A: "Terastal Festival ex",
+  SV9: "Battle Partners",
+  SV9A: "Heat Wave Arena",
+  SV10: "The Glory of Team Rocket",
+  SV11B: "Black Bolt",
+  SV11W: "White Flare",
+};
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36";
 
@@ -83,6 +110,19 @@ function normalizeCollectorToken(value) {
     .replace(/[–—_]/g, "-");
 }
 
+function normalizeSetName(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "");
+}
+
+function sameSetName(left, right) {
+  return Boolean(left && right && normalizeSetName(left) === normalizeSetName(right));
+}
+
 function getExpectedCollectorNumbers(code) {
   const values = new Set();
   values.add(normalizeCollectorToken(code.cardNumber));
@@ -94,7 +134,7 @@ function getExpectedCollectorNumbers(code) {
 
 async function loadSetCodeMap() {
   const markdown = await fetchText(rJinaUrl(TCGCOLLECTOR_SETS_URL));
-  const mapping = {};
+  const mapping = { ...LOCAL_SET_NAME_MAP };
   const lines = markdown.split("\n");
 
   for (const rawLine of lines) {
@@ -125,8 +165,8 @@ async function loadSetCodeMap() {
     const suffix = line.slice(closeIndex + 1).trim();
     const code = suffix.split(/\s+/)[0] || "";
 
-    if (name && code && !mapping[code]) {
-      mapping[code] = name;
+    if (name && code && !mapping[code.toUpperCase()]) {
+      mapping[code.toUpperCase()] = name;
     }
   }
 
@@ -229,10 +269,26 @@ async function searchTcgCollector(query, code, setName) {
 
   if (setName) {
     for (const item of matches) {
-      if (item.setName === setName) {
+      if (sameSetName(item.setName, setName)) {
         return item;
       }
     }
+    const available = matches
+      .slice(0, 5)
+      .map(function(item) {
+        return item.setName + " " + item.printedNumber + ": " + item.title;
+      })
+      .join(" / ");
+    throw new Error(
+      "找到编号 " +
+        code.cardNumber +
+        "，但没有匹配卡包 " +
+        code.setCode +
+        " (" +
+        setName +
+        ") 的结果。候选：" +
+        available,
+    );
   }
 
   if (matches.length === 1) {
@@ -251,7 +307,13 @@ async function searchTcgCollector(query, code, setName) {
 
 async function searchTcgCollectorWithFallback(code, setName) {
   const queries = [];
-  if (code.denominator) {
+  if (setName) {
+    queries.push(code.cardNumber + " " + setName);
+    queries.push(setName + " " + code.cardNumber);
+    queries.push(code.cardNum + " " + setName);
+    queries.push(code.setCode + " " + code.cardNum);
+    queries.push(code.cardNumber);
+  } else if (code.denominator) {
     queries.push(code.cardNumber);
   } else {
     queries.push(code.cardNum + " " + code.setCode);
@@ -283,23 +345,26 @@ async function searchTcgCollectorWithFallback(code, setName) {
 
 async function lookupCardImage(rawCode) {
   const code = parseCardCode(rawCode);
-  const tcgMikUrl = TCG_MIK_URL
-    .replace("{set_code}", code.setCode)
-    .replace("{card_num}", code.cardNum);
+  const setNameMap = await loadSetCodeMap();
+  const setName = setNameMap[code.setCode] || setNameMap[String(code.setCode || "").toUpperCase()] || "";
 
-  if (await urlExists(tcgMikUrl)) {
-    return {
-      code: code.canonical,
-      source: "tcg.mik.moe",
-      title: code.canonical,
-      imageUrl: tcgMikUrl,
-      pageUrl: "",
-      setName: "",
-    };
+  if (!code.denominator) {
+    const tcgMikUrl = TCG_MIK_URL
+      .replace("{set_code}", code.setCode)
+      .replace("{card_num}", code.cardNum);
+
+    if (await urlExists(tcgMikUrl)) {
+      return {
+        code: code.canonical,
+        source: "tcg.mik.moe",
+        title: code.canonical,
+        imageUrl: tcgMikUrl,
+        pageUrl: "",
+        setName: "",
+      };
+    }
   }
 
-  const setNameMap = await loadSetCodeMap();
-  const setName = setNameMap[code.setCode] || "";
   return await searchTcgCollectorWithFallback(code, setName);
 }
 

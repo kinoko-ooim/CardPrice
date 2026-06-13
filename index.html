@@ -823,6 +823,33 @@ const SUPABASE_SCREENSHOT_AI_FUNCTION = 'card-screenshot-extract-v1';
 const TCGCOLLECTOR_R_JINA_PREFIX = 'https://r.jina.ai/http://';
 const TCGCOLLECTOR_SETS_URL = 'https://www.tcgcollector.com/sets/jp?cardCountMode=anyCardVariant&releaseDateOrder=newToOld&displayAs=images';
 const TCGCOLLECTOR_SEARCH_URL = 'https://www.tcgcollector.com/cards/jp?cardSource=inCardVariant&releaseDateOrder=newToOld&displayAs=images&cardSearch={query}';
+const TCGCOLLECTOR_LOCAL_SET_NAME_MAP = {
+  SV1S: 'Scarlet ex',
+  SV1V: 'Violet ex',
+  SV1A: 'Triplet Beat',
+  SV2D: 'Clay Burst',
+  SV2P: 'Snow Hazard',
+  SV2A: 'Pokemon Card 151',
+  SV3: 'Ruler of the Black Flame',
+  SV3A: 'Raging Surf',
+  SV4K: 'Ancient Roar',
+  SV4M: 'Future Flash',
+  SV4A: 'Shiny Treasure ex',
+  SV5K: 'Wild Force',
+  SV5M: 'Cyber Judge',
+  SV5A: 'Crimson Haze',
+  SV6: 'Mask of Change',
+  SV6A: 'Night Wanderer',
+  SV7: 'Stellar Miracle',
+  SV7A: 'Paradise Dragona',
+  SV8: 'Super Electric Breaker',
+  SV8A: 'Terastal Festival ex',
+  SV9: 'Battle Partners',
+  SV9A: 'Heat Wave Arena',
+  SV10: 'The Glory of Team Rocket',
+  SV11B: 'Black Bolt',
+  SV11W: 'White Flare'
+};
 const OLD_CARD_CLOUD_SCOPE = 'old-cards';
 const SOLD_0754_CLOUD_SCOPE = '0754-sold';
 let memoryAccessGranted = false;
@@ -1304,6 +1331,24 @@ function normalizeCollectorToken(value) {
     .replace(/\s+/g, '')
     .replace(/[–—_]/g, '-');
 }
+function normalizeCollectorSetName(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '');
+}
+function isSameCollectorSetName(left, right) {
+  return Boolean(left && right && normalizeCollectorSetName(left) === normalizeCollectorSetName(right));
+}
+function shouldUseTcgMikFallback(cardCode) {
+  try {
+    return !parseCardCodeForLookup(cardCode).denominator;
+  } catch (_error) {
+    return false;
+  }
+}
 function getExpectedCollectorNumbers(code) {
   const values = new Set();
   values.add(normalizeCollectorToken(code.cardNumber));
@@ -1317,7 +1362,7 @@ async function loadTcgCollectorSetCodeMap() {
   if (!tcgCollectorSetCodeMapPromise) {
     tcgCollectorSetCodeMapPromise = (async () => {
       const markdown = await fetchTcgCollectorProxyText(TCGCOLLECTOR_SETS_URL);
-      const mapping = {};
+      const mapping = { ...TCGCOLLECTOR_LOCAL_SET_NAME_MAP };
       const lines = markdown.split('\n');
       for (const rawLine of lines) {
         const line = String(rawLine || '').trim();
@@ -1334,8 +1379,8 @@ async function loadTcgCollectorSetCodeMap() {
         const name = line.slice(nameStart + 1, linkIndex).trim();
         const suffix = line.slice(closeIndex + 1).trim();
         const code = suffix.split(/\s+/)[0] || '';
-        if (name && code && !mapping[code]) {
-          mapping[code] = name;
+        if (name && code && !mapping[code.toUpperCase()]) {
+          mapping[code.toUpperCase()] = name;
         }
       }
       return mapping;
@@ -1346,10 +1391,12 @@ async function loadTcgCollectorSetCodeMap() {
 async function searchCardImageViaTcgCollector(cardCode) {
   const code = parseCardCodeForLookup(cardCode);
   const setNameMap = await loadTcgCollectorSetCodeMap();
-  const preferredSetName = setNameMap[code.setCode] || '';
-  const queries = code.denominator
-    ? [code.cardNumber, `${code.setCode} ${code.cardNum}`]
-    : [`${code.cardNum} ${code.setCode}`, `${code.setCode} ${code.cardNum}`, `${code.cardNum}/${code.setCode}`];
+  const preferredSetName = setNameMap[code.setCode] || setNameMap[String(code.setCode || '').toUpperCase()] || '';
+  const queries = preferredSetName
+    ? [`${code.cardNumber} ${preferredSetName}`, `${preferredSetName} ${code.cardNumber}`, `${code.cardNum} ${preferredSetName}`, `${code.setCode} ${code.cardNum}`, code.cardNumber]
+    : (code.denominator
+      ? [code.cardNumber, `${code.setCode} ${code.cardNum}`]
+      : [`${code.cardNum} ${code.setCode}`, `${code.setCode} ${code.cardNum}`, `${code.cardNum}/${code.setCode}`]);
   const expectedNumbers = getExpectedCollectorNumbers(code);
   let lastError = null;
 
@@ -1378,11 +1425,20 @@ async function searchCardImageViaTcgCollector(cardCode) {
         throw new Error(`没有在 TCG Collector 中找到 ${code.canonical}`);
       }
       if (preferredSetName) {
-        const exact = matches.find(item => item.setName === preferredSetName);
+        const exact = matches.find(item => isSameCollectorSetName(item.setName, preferredSetName));
         if (exact) return exact;
+        const available = matches
+          .slice(0, 5)
+          .map(item => `${item.setName} ${item.printedNumber}: ${item.title}`)
+          .join(' / ');
+        throw new Error(`找到编号 ${code.cardNumber}，但没有匹配卡包 ${code.setCode} (${preferredSetName}) 的结果。候选：${available}`);
       }
       if (matches.length === 1) return matches[0];
-      return matches[0];
+      const available = matches
+        .slice(0, 5)
+        .map(item => `${item.setName} ${item.printedNumber}: ${item.title}`)
+        .join(' / ');
+      throw new Error(`找到了多个同编号结果，但没法唯一匹配 ${code.setCode}。候选：${available}`);
     } catch (error) {
       lastError = error;
     }
@@ -2325,7 +2381,7 @@ async function enrichRecognizedItemsWithImages(items) {
         imageUrl: result.imageUrl || item.imageUrl || null
       };
     } catch (_error) {
-      const fallbackUrl = buildTcgMikImageUrl(item.cardCode);
+      const fallbackUrl = shouldUseTcgMikFallback(item.cardCode) ? buildTcgMikImageUrl(item.cardCode) : null;
       return {
         ...item,
         imageUrl: fallbackUrl || item.imageUrl || null
