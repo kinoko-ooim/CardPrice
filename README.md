@@ -35,6 +35,7 @@
 - 表格“单价”下方会显示单价与参考价的差值：普通卡对比“流通品价”，勾选 `PSA10` 的卡对比“PSA10价”。
 - CSV 导出会包含“是否PSA10”列，方便备份和二次整理。
 - 页面直接用 `file://` 打开时，如果浏览器禁止 `sessionStorage`，密码验证会自动退回到当前页面内存状态，不影响进入后台。
+- 密码入口带有独立于 React 的兜底表单：即使 React/Babel/CDN 脚本加载失败，也会保留可输入的密码框，避免只显示背景空白页。
 - “截图识别新增 -> AI识别”兼容两种接入方式：如果在弹窗里的“AI配置”保存了 OpenAI 兼容直连 API，会优先直连识别；没有直连配置时，会继续使用 Supabase Edge Function `card-screenshot-extract-v1`。
 - 直连 API 配置保存在当前浏览器 `localStorage`，默认示例为 `http://43.155.156.14:8080/v1/chat/completions`、模型 `gpt-5.5`、`AI_USE_JSON_SCHEMA=false`。如果页面通过 `file://` 打开，API 网关需要允许浏览器 CORS（常见为 `Origin: null`），否则页面会提示直连被拦截并尝试 Supabase 兜底。
 - “AI配置”里的 API Key 输入框默认隐藏，保存状态只显示打码摘要；配置弹窗提供“测试连接”按钮，会用轻量文本请求检查直连 API 是否可用，并显示成功、401/403 或 CORS 拦截等结果。

@@ -6,7 +6,7 @@
   <title>卡价管理后台</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
@@ -802,9 +802,88 @@
   <link rel="stylesheet" href="skin-pokopia.css">
 </head>
 <body>
+<div class="auth-shell" id="auth-fallback" style="display:flex">
+  <div class="auth-card">
+    <div class="auth-badge">🔒 后台受保护</div>
+    <div class="auth-title">输入密码后继续</div>
+    <div class="auth-subtitle">这个后台现在需要先输入访问密码，验证通过后才会加载卡价管理和 0754 售出数据。</div>
+    <form id="auth-fallback-form">
+      <input
+        class="form-input"
+        id="auth-fallback-input"
+        type="password"
+        autocomplete="current-password"
+        placeholder="请输入访问密码"
+        style="font-size:16px"
+      />
+      <div style="display:flex; gap:10px; margin-top:14px">
+        <button class="btn btn-primary" id="auth-fallback-button" type="submit">进入后台</button>
+      </div>
+    </form>
+    <div class="auth-error" id="auth-fallback-error" style="display:none"></div>
+    <div class="auth-hint">
+      当前版本是前端口令保护，适合拦住直接打开页面的访问；如果后面你要更严格的权限控制，我可以继续帮你接真正的账号登录。
+    </div>
+  </div>
+</div>
 <div id="root"></div>
+<script>
+(function() {
+  var accessSessionKey = 'kajia_access_granted';
+  var accessPasswordHash = '1549c7def3809f8916e748ac0b005fb002f912cd03a60bbd7919e40de0576c5f';
+  var shell = document.getElementById('auth-fallback');
+  var form = document.getElementById('auth-fallback-form');
+  var input = document.getElementById('auth-fallback-input');
+  var button = document.getElementById('auth-fallback-button');
+  var errorBox = document.getElementById('auth-fallback-error');
+
+  function setFallbackError(message) {
+    if (!errorBox) return;
+    errorBox.textContent = message || '';
+    errorBox.style.display = message ? 'block' : 'none';
+  }
+
+  async function sha256HexFallback(value) {
+    var inputBytes = new TextEncoder().encode(String(value || ''));
+    var digest = await crypto.subtle.digest('SHA-256', inputBytes);
+    return Array.from(new Uint8Array(digest)).map(function(byte) {
+      return byte.toString(16).padStart(2, '0');
+    }).join('');
+  }
+
+  try {
+    if (sessionStorage.getItem(accessSessionKey) === '1' && shell) {
+      shell.style.display = 'none';
+    }
+  } catch (error) {}
+
+  if (!form || !input) return;
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    setFallbackError('');
+    if (button) button.disabled = true;
+    sha256HexFallback(input.value || '').then(function(digest) {
+      if (digest !== accessPasswordHash) {
+        input.value = '';
+        input.focus();
+        setFallbackError('密码不正确，请重试');
+        return;
+      }
+      try {
+        sessionStorage.setItem(accessSessionKey, '1');
+      } catch (error) {}
+      if (shell) shell.style.display = 'none';
+      window.location.reload();
+    }).catch(function() {
+      setFallbackError('密码校验失败，请刷新后重试');
+    }).finally(function() {
+      if (button) button.disabled = false;
+    });
+  });
+})();
+</script>
 <script src="tab0754.js"></script>
-  <script type="text/babel">
+  <script type="text/babel" data-presets="env,react">
 const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
 // ── Initial data ──────────────────────────────────────────────────────────────
@@ -5303,6 +5382,8 @@ function ProtectedApp() {
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<ProtectedApp />);
+const fallbackAuthShell = document.getElementById('auth-fallback');
+if (fallbackAuthShell) fallbackAuthShell.style.display = 'none';
 </script>
 </body>
 </html>
