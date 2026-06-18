@@ -387,6 +387,8 @@
     tr:hover td { background: rgba(255,255,255,0.02); }
     tr.status-sold td { background: var(--green-bg); }
     tr.status-sold:hover td { background: rgba(62,207,142,0.14); }
+    tr.status-partial td { background: rgba(245,158,11,0.08); }
+    tr.status-partial:hover td { background: rgba(245,158,11,0.13); }
     tr.status-signed td { background: var(--orange-bg); }
     tr.status-signed:hover td { background: rgba(245,158,11,0.14); }
     th.action-col,
@@ -402,6 +404,8 @@
     tr:hover td.action-col { background: #1c1c1c; }
     tr.status-sold td.action-col { background: var(--green-bg); }
     tr.status-sold:hover td.action-col { background: rgba(62,207,142,0.14); }
+    tr.status-partial td.action-col { background: rgba(245,158,11,0.08); }
+    tr.status-partial:hover td.action-col { background: rgba(245,158,11,0.13); }
     tr.status-signed td.action-col { background: var(--orange-bg); }
     tr.status-signed:hover td.action-col { background: rgba(245,158,11,0.14); }
     .row-actions {
@@ -534,6 +538,7 @@
     }
     .status-unsold { background: #111111; color: var(--text-3); border: 1px solid var(--border); }
     .status-sold { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+    .status-partial { background: rgba(245,158,11,0.11); color: var(--orange); border: 1px solid var(--orange-border); }
     .status-signed { background: var(--orange-bg); color: var(--orange); border: 1px solid var(--orange-border); }
 
     .action-btn {
@@ -977,6 +982,43 @@ function calcProfit(cost, sellPrice) {
   return s - c;
 }
 function round2(v) { return Math.round(v * 100) / 100; }
+function getItemSoldQty(item) {
+  return (item?.sells || []).reduce((sum, sell) => sum + (sell.qty || 0), 0);
+}
+function getItemSoldValue(item) {
+  return (item?.sells || []).reduce((sum, sell) => sum + (sell.total || 0), 0);
+}
+function getItemRemainingQty(item) {
+  return Math.max(0, (item?.qty || 0) - getItemSoldQty(item));
+}
+function getItemSoldCost(item) {
+  const soldQty = getItemSoldQty(item);
+  if (soldQty <= 0) return 0;
+  const qty = Math.max(0, item?.qty || 0);
+  const cost = item?.cost || 0;
+  if (qty > 0) return round2(cost * Math.min(soldQty, qty) / qty);
+  return round2(cost);
+}
+function getItemSaleProfit(item) {
+  const soldValue = getItemSoldValue(item);
+  if (soldValue <= 0) return null;
+  return round2(soldValue - getItemSoldCost(item));
+}
+function getItemInventoryStatus(item) {
+  const soldQty = getItemSoldQty(item);
+  const remainingQty = getItemRemainingQty(item);
+  if (item?.status === '待签收') return '待签收';
+  if (soldQty > 0 && remainingQty > 0) return '部分售出';
+  if (soldQty > 0 && remainingQty <= 0) return '已售出';
+  return '未售出';
+}
+function matchesInventoryFilter(item, filter) {
+  if (filter === '全部') return true;
+  if (filter === '待签收') return item?.status === '待签收';
+  if (filter === '已售出') return item?.status !== '待签收' && getItemSoldQty(item) > 0 && getItemRemainingQty(item) <= 0;
+  if (filter === '未售出') return item?.status !== '待签收' && getItemRemainingQty(item) > 0;
+  return getItemInventoryStatus(item) === filter;
+}
 function generateId(items) {
   return items.length > 0 ? Math.max(...items.map(i => i.id)) + 1 : 1;
 }
@@ -1182,7 +1224,7 @@ function normalizeItem(raw, index) {
     sells,
     status,
     source: raw.source || '导入备份',
-    profit: totalSell > 0 ? round2(totalSell - cost) : null,
+    profit: getItemSaleProfit({ qty, cost, sells }),
     isPsa10: raw.isPsa10 === true || raw.isPsa10 === 'true' || raw.grade === 'PSA10' || raw.gradeLabel === 'PSA10',
     cardLanguage: normalizeCardLanguage(raw.cardLanguage || raw.language || raw.lang || raw.jhsGameLabel || raw.jhsGame || ''),
     jhsRawPrice: normalizeOptionalPrice(raw.jhsRawPrice, raw.jhsCirculationPrice, raw.rawMarketPrice, raw.marketPrice, raw.rawPrice),
@@ -2833,8 +2875,9 @@ function EditModal({ item, onSave, onClose, onToast }) {
 
   function handleSave() {
     const cost = form.cost === '' ? 0 : parseFloat(form.cost);
-    const totalSell = form.sells.reduce((sum, s) => sum + (s.total || 0), 0);
-    const profit = totalSell > 0 ? round2(totalSell - cost) : null;
+    const qty = form.qty === '' ? 1 : parseInt(form.qty);
+    const sells = form.sells.filter(s => s.total > 0);
+    const profit = getItemSaleProfit({ qty, cost, sells });
     // 保留图片和编号：优先用表单值，否则用原值
     const savedCardCode = form.cardCode || item.cardCode || null;
     const savedImageUrl = form.imageUrl.trim() || item.imageUrl || null;
@@ -2845,7 +2888,7 @@ function EditModal({ item, onSave, onClose, onToast }) {
       cardCode: savedCardCode,
       cardLanguage: form.cardLanguage,
       unitPrice: form.unitPrice === '' ? null : parseFloat(form.unitPrice),
-      qty: form.qty === '' ? 1 : parseInt(form.qty),
+      qty,
       cost,
       jhsRawPrice: form.jhsRawPrice === '' ? null : round2(parseFloat(form.jhsRawPrice)),
       jhsPsa10Price: form.jhsPsa10Price === '' ? null : round2(parseFloat(form.jhsPsa10Price)),
@@ -2854,7 +2897,7 @@ function EditModal({ item, onSave, onClose, onToast }) {
       jhsSearchCode: form.jhsSearchCode.trim(),
       jhsGameLabel: form.jhsGameLabel,
       isPsa10: !!form.isPsa10,
-      sells: form.sells.filter(s => s.total > 0),
+      sells,
       status: form.status,
       profit
     });
@@ -2862,8 +2905,9 @@ function EditModal({ item, onSave, onClose, onToast }) {
 
   const totalSell = form.sells.reduce((sum, s) => sum + (s.total || 0), 0);
   const cost = form.cost === '' ? 0 : parseFloat(form.cost);
-  const remaining = (parseInt(form.qty) || 0) - form.sells.reduce((sum, s) => sum + (parseInt(s.qty) || 0), 0);
-  const profit = totalSell > 0 ? round2(totalSell - cost) : null;
+  const qty = form.qty === '' ? 1 : parseInt(form.qty);
+  const remaining = getItemRemainingQty({ qty, sells: form.sells });
+  const profit = getItemSaleProfit({ qty, cost, sells: form.sells });
 
   return (
     <ModalPortal>
@@ -4083,8 +4127,10 @@ function OldCardInventoryTab({ showToast, supabaseConfig }) {
   }
 
   function getSortVal(item, field) {
-    if (field === 'remaining') return (item.qty ?? 0) - (item.sells || []).reduce((s, v) => s + (v.qty || 0), 0);
-    if (field === 'soldValue') return (item.sells || []).reduce((s, v) => s + (v.total || 0), 0);
+    if (field === 'remaining') return getItemRemainingQty(item);
+    if (field === 'soldValue') return getItemSoldValue(item);
+    if (field === 'profit') return getItemSaleProfit(item) ?? -Infinity;
+    if (field === 'status') return getItemInventoryStatus(item);
     if (field === 'cardLanguage') return item.cardLanguage || item.jhsGameLabel || '';
     let val = item[field];
     if (val === null || val === undefined) {
@@ -4095,9 +4141,7 @@ function OldCardInventoryTab({ showToast, supabaseConfig }) {
 
   const filtered = useMemo(() => {
     let list = items;
-    if (filter === '已售出') list = list.filter(i => i.status === '已售出');
-    else if (filter === '待签收') list = list.filter(i => i.status === '待签收');
-    else if (filter === '未售出') list = list.filter(i => i.status === '未售出');
+    if (filter !== '全部') list = list.filter(i => matchesInventoryFilter(i, filter));
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter(i =>
@@ -4168,7 +4212,7 @@ function OldCardInventoryTab({ showToast, supabaseConfig }) {
 
   function handleBulkMarkSigned() {
     setItems(prev => prev.map(i => {
-      if (i.status === '未售出' && (i.sells || []).reduce((s, v) => s + (v.total || 0), 0) > 0) {
+      if (i.status !== '待签收' && getItemSoldValue(i) > 0) {
         return { ...i, status: '待签收' };
       }
       return i;
@@ -4180,11 +4224,10 @@ function OldCardInventoryTab({ showToast, supabaseConfig }) {
     const headers = ['ID', '名称', '是否PSA10', '语言版本', '单价', '数量', '已售数量', '剩余数量', '成本', '集换社搜索编号', '集换社游戏语言', '流通品价', 'PSA10价', '价格更新时间', '价格备注', '已售总收入', '利润', '状态', '来源'];
     const sortedForExport = [...items].sort((a, b) => a.id - b.id);
     const exportRows = sortedForExport.map(i => {
-      const sells = i.sells || [];
-      const totalSellQty = sells.reduce((s, v) => s + (v.qty || 0), 0);
-      const totalSellVal = sells.reduce((s, v) => s + (v.total || 0), 0);
-      const remaining = (i.qty || 0) - totalSellQty;
-      return [i.id, i.name, i.isPsa10 ? '是' : '', i.cardLanguage || i.jhsGameLabel || '', i.unitPrice ?? '', i.qty ?? '', totalSellQty, remaining, i.cost ?? '', i.jhsSearchCode || '', i.jhsGameLabel || '', i.jhsRawPrice ?? '', i.jhsPsa10Price ?? '', i.jhsPriceUpdatedAt || '', i.jhsPriceNote || '', totalSellVal || '', i.profit ?? '', i.status, i.source];
+      const totalSellQty = getItemSoldQty(i);
+      const totalSellVal = getItemSoldValue(i);
+      const remaining = getItemRemainingQty(i);
+      return [i.id, i.name, i.isPsa10 ? '是' : '', i.cardLanguage || i.jhsGameLabel || '', i.unitPrice ?? '', i.qty ?? '', totalSellQty, remaining, i.cost ?? '', i.jhsSearchCode || '', i.jhsGameLabel || '', i.jhsRawPrice ?? '', i.jhsPsa10Price ?? '', i.jhsPriceUpdatedAt || '', i.jhsPriceNote || '', totalSellVal || '', getItemSaleProfit(i) ?? '', getItemInventoryStatus(i), i.source];
     });
     const csv = [headers, ...exportRows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -4212,19 +4255,16 @@ function OldCardInventoryTab({ showToast, supabaseConfig }) {
 
   const totalCards = items.reduce((sum, i) => sum + (i.qty || 1), 0);
   const totalCost = items.reduce((sum, i) => sum + (i.cost || 0), 0);
-  const totalSoldValue = items.filter(i => i.status === '已售出').reduce((sum, i) => sum + (i.sells || []).reduce((s, v) => s + (v.total || 0), 0), 0);
-  const totalPendingValue = items.filter(i => i.status === '待签收').reduce((sum, i) => sum + (i.sells || []).reduce((s, v) => s + (v.total || 0), 0), 0);
-  const totalSoldCost = items.filter(i => i.status === '已售出' || i.status === '待签收').reduce((sum, i) => sum + (i.cost || 0), 0);
+  const totalSoldValue = round2(items.filter(i => i.status !== '待签收').reduce((sum, i) => sum + getItemSoldValue(i), 0));
+  const totalPendingValue = round2(items.filter(i => i.status === '待签收').reduce((sum, i) => sum + getItemSoldValue(i), 0));
+  const totalSoldCost = round2(items.filter(i => i.status !== '未售出' || getItemSoldQty(i) > 0).reduce((sum, i) => sum + getItemSoldCost(i), 0));
   const totalEarned = totalSoldValue + totalPendingValue;
   const toBreakEven = totalCost - totalEarned;
-  const totalProfit = items.reduce((sum, i) => {
-    if (i.status === '未售出') return sum;
-    const totalSell = (i.sells || []).reduce((s, v) => s + (v.total || 0), 0);
-    return sum + round2(totalSell - (i.cost || 0));
-  }, 0);
-  const soldCount = items.filter(i => i.status === '已售出').length;
+  const totalProfit = round2(items.reduce((sum, i) => sum + (getItemSaleProfit(i) || 0), 0));
+  const soldCount = items.filter(i => i.status !== '待签收' && getItemSoldQty(i) > 0 && getItemRemainingQty(i) <= 0).length;
   const pendingCount = items.filter(i => i.status === '待签收').length;
-  const unsoldCount = items.filter(i => i.status === '未售出').length;
+  const partialCount = items.filter(i => i.status !== '待签收' && getItemSoldQty(i) > 0 && getItemRemainingQty(i) > 0).length;
+  const unsoldCount = items.filter(i => i.status !== '待签收' && getItemRemainingQty(i) > 0).length;
 
   function SortIcon({ field }) {
     if (sortField !== field) return <span className="sort-icon">⇅</span>;
@@ -4232,19 +4272,25 @@ function OldCardInventoryTab({ showToast, supabaseConfig }) {
   }
 
   function statusBadgeClass(item) {
-    if (item.status === '已售出') return 'status-badge status-sold';
+    const displayStatus = getItemInventoryStatus(item);
+    if (displayStatus === '已售出') return 'status-badge status-sold';
+    if (displayStatus === '部分售出') return 'status-badge status-partial';
     if (item.status === '待签收') return 'status-badge status-signed';
     return 'status-badge status-unsold';
   }
 
   function statusBadgeText(item) {
-    if (item.status === '已售出') return '● 已售出';
+    const displayStatus = getItemInventoryStatus(item);
+    if (displayStatus === '已售出') return '● 已售出';
+    if (displayStatus === '部分售出') return '◐ 部分售出';
     if (item.status === '待签收') return '● 待签收';
     return '○ 未售出';
   }
 
   function rowClass(item) {
-    if (item.status === '已售出') return 'status-sold';
+    const displayStatus = getItemInventoryStatus(item);
+    if (displayStatus === '已售出') return 'status-sold';
+    if (displayStatus === '部分售出') return 'status-partial';
     if (item.status === '待签收') return 'status-signed';
     return '';
   }
@@ -4255,7 +4301,7 @@ function OldCardInventoryTab({ showToast, supabaseConfig }) {
         <div className="stat-card blue">
           <div className="stat-label">库存成本</div>
           <div className="stat-value">{formatMoney(totalCost)}</div>
-          <div className="stat-sub">{unsoldCount} 种未售出</div>
+          <div className="stat-sub">{unsoldCount} 种在库{partialCount > 0 ? `，${partialCount} 种部分售出` : ''}</div>
           <div className="stat-detail">
             <div className="stat-detail-label">{toBreakEven > 0 ? '距回本还差' : '已超额回本'}</div>
             <div style={{fontSize:18,fontWeight:700,color:toBreakEven > 0 ? 'var(--orange)' : 'var(--green)'}}>{toBreakEven > 0 ? formatMoney(toBreakEven) : formatMoney(-toBreakEven)}</div>
@@ -4265,7 +4311,7 @@ function OldCardInventoryTab({ showToast, supabaseConfig }) {
         <div className="stat-card green">
           <div className="stat-label">已售总额</div>
           <div className="stat-value green">{formatMoney(totalSoldValue)}</div>
-          <div className="stat-sub">{soldCount} 种已售出</div>
+          <div className="stat-sub">{soldCount} 种全量售出{partialCount > 0 ? `，另 ${partialCount} 种部分售出` : ''}</div>
           <div className="stat-detail">
             <div className="stat-detail-label">当前利润</div>
             <div style={{fontSize:18,fontWeight:700,color:totalProfit >= 0 ? 'var(--green)' : 'var(--red)'}}>{totalProfit >= 0 ? '+' : ''}{formatMoney(totalProfit)}</div>
@@ -4412,21 +4458,21 @@ function OldCardInventoryTab({ showToast, supabaseConfig }) {
                       {renderUnitReferenceDelta(item)}
                     </td>
                     <td className="price-cell" style={{textAlign:'right'}}>{item.qty ?? '—'}</td>
-                    <td className="price-cell" style={{textAlign:'right', color: 'var(--text-3)'}}>{(item.qty ?? 0) - (item.sells || []).reduce((s, v) => s + (v.qty || 0), 0)}</td>
+                    <td className="price-cell" style={{textAlign:'right', color: 'var(--text-3)'}}>{getItemRemainingQty(item)}</td>
                     <td className="price-cell" style={{textAlign:'right'}}>{item.cost !== null ? formatMoney(item.cost) : '—'}</td>
                     <td className="price-cell" style={{textAlign:'right', color: 'var(--green)', fontWeight:600}}>
-                      {(item.sells || []).reduce((s, v) => s + (v.qty || 0), 0) > 0
+                      {getItemSoldQty(item) > 0
                         ? (() => {
-                            const totalQty = (item.sells || []).reduce((s, v) => s + (v.qty || 0), 0);
-                            const totalVal = (item.sells || []).reduce((s, v) => s + (v.total || 0), 0);
+                            const totalQty = getItemSoldQty(item);
+                            const totalVal = getItemSoldValue(item);
                             return `${totalQty}张 ¥${totalVal.toFixed(2)}`;
                           })()
                         : '—'}
                     </td>
                     <td className="price-cell" style={{textAlign:'right'}}>
-                      {item.profit !== null ? (
-                        <span className={item.profit > 0 ? 'profit-positive' : item.profit < 0 ? 'profit-negative' : 'profit-zero'}>
-                          {item.profit > 0 ? '+' : ''}{formatMoney(item.profit)}
+                      {getItemSaleProfit(item) !== null ? (
+                        <span className={getItemSaleProfit(item) > 0 ? 'profit-positive' : getItemSaleProfit(item) < 0 ? 'profit-negative' : 'profit-zero'}>
+                          {getItemSaleProfit(item) > 0 ? '+' : ''}{formatMoney(getItemSaleProfit(item))}
                         </span>
                       ) : '—'}
                     </td>
@@ -4724,8 +4770,10 @@ function App({ onLock }) {
 
   // Helper: get sortable value from item (supports computed fields)
   const getSortVal = useCallback((item, field) => {
-    if (field === 'remaining') return (item.qty ?? 0) - (item.sells || []).reduce((s, v) => s + (v.qty || 0), 0);
-    if (field === 'soldValue') return (item.sells || []).reduce((s, v) => s + (v.total || 0), 0);
+    if (field === 'remaining') return getItemRemainingQty(item);
+    if (field === 'soldValue') return getItemSoldValue(item);
+    if (field === 'profit') return getItemSaleProfit(item) ?? -Infinity;
+    if (field === 'status') return getItemInventoryStatus(item);
     if (field === 'cardLanguage') return item.cardLanguage || item.jhsGameLabel || '';
     if (field === 'jhsRawPrice') return priceChangeSortValue(item, 'raw');
     if (field === 'jhsPsa10Price') return priceChangeSortValue(item, 'psa10');
@@ -4737,9 +4785,7 @@ function App({ onLock }) {
   // Filter + sort
   const filtered = useMemo(() => {
     let list = items;
-    if (filter === '已售出') list = list.filter(i => i.status === '已售出');
-    else if (filter === '待签收') list = list.filter(i => i.status === '待签收');
-    else if (filter === '未售出') list = list.filter(i => i.status === '未售出');
+    if (filter !== '全部') list = list.filter(i => matchesInventoryFilter(i, filter));
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter(i =>
@@ -4864,7 +4910,7 @@ function App({ onLock }) {
 
   function handleBulkMarkSigned() {
     setItems(prev => prev.map(i => {
-      if (i.status === '未售出' && (i.sells || []).reduce((s, v) => s + (v.total || 0), 0) > 0) {
+      if (i.status !== '待签收' && getItemSoldValue(i) > 0) {
         return { ...i, status: '待签收' };
       }
       return i;
@@ -4876,11 +4922,10 @@ function App({ onLock }) {
     const headers = ['ID', '名称', '是否PSA10', '语言版本', '集换社搜索编号', '集换社游戏语言', '流通品价', 'PSA10价', '价格更新时间', '价格备注', '单价', '数量', '已售数量', '剩余数量', '成本', '已售总收入', '利润', '状态', '来源'];
     const sortedForExport = [...items].sort((a, b) => a.id - b.id);
     const exportRows = sortedForExport.map(i => {
-      const sells = i.sells || [];
-      const totalSellQty = sells.reduce((s, v) => s + (v.qty || 0), 0);
-      const totalSellVal = sells.reduce((s, v) => s + (v.total || 0), 0);
-      const remaining = (i.qty || 0) - totalSellQty;
-      return [i.id, i.name, i.isPsa10 ? '是' : '', i.cardLanguage || i.jhsGameLabel || '', i.jhsSearchCode || '', i.jhsGameLabel || '', i.jhsRawPrice ?? '', i.jhsPsa10Price ?? '', i.jhsPriceUpdatedAt || '', i.jhsPriceNote || '', i.unitPrice ?? '', i.qty ?? '', totalSellQty, remaining, i.cost ?? '', totalSellVal || '', i.profit ?? '', i.status, i.source];
+      const totalSellQty = getItemSoldQty(i);
+      const totalSellVal = getItemSoldValue(i);
+      const remaining = getItemRemainingQty(i);
+      return [i.id, i.name, i.isPsa10 ? '是' : '', i.cardLanguage || i.jhsGameLabel || '', i.jhsSearchCode || '', i.jhsGameLabel || '', i.jhsRawPrice ?? '', i.jhsPsa10Price ?? '', i.jhsPriceUpdatedAt || '', i.jhsPriceNote || '', i.unitPrice ?? '', i.qty ?? '', totalSellQty, remaining, i.cost ?? '', totalSellVal || '', getItemSaleProfit(i) ?? '', getItemInventoryStatus(i), i.source];
     });
     const csv = [headers, ...exportRows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -4918,30 +4963,21 @@ function App({ onLock }) {
   // Stats
   const totalCards = items.reduce((sum, i) => sum + (i.qty || 1), 0);
   const totalCost = items.reduce((sum, i) => sum + (i.cost || 0), 0);
-  const totalSoldValue = items.filter(i => i.status === '已售出').reduce((sum, i) => {
-    return sum + (i.sells || []).reduce((s, v) => s + (v.total || 0), 0);
-  }, 0);
-  const totalPendingValue = items.filter(i => i.status === '待签收').reduce((sum, i) => {
-    return sum + (i.sells || []).reduce((s, v) => s + (v.total || 0), 0);
-  }, 0);
-  const totalSoldCost = items.filter(i => i.status === '已售出' || i.status === '待签收').reduce((sum, i) => sum + (i.cost || 0), 0);
+  const totalSoldValue = round2(items.filter(i => i.status !== '待签收').reduce((sum, i) => sum + getItemSoldValue(i), 0));
+  const totalPendingValue = round2(items.filter(i => i.status === '待签收').reduce((sum, i) => sum + getItemSoldValue(i), 0));
+  const totalSoldCost = round2(items.filter(i => i.status !== '未售出' || getItemSoldQty(i) > 0).reduce((sum, i) => sum + getItemSoldCost(i), 0));
   const remainingInventoryValue = round2(items.reduce((sum, i) => {
-    const qty = i.qty || 0;
-    const soldQty = (i.sells || []).reduce((s, v) => s + (v.qty || 0), 0);
-    const remainingQty = Math.max(0, qty - soldQty);
+    const remainingQty = getItemRemainingQty(i);
     const unitPrice = i.unitPrice === null || i.unitPrice === undefined ? 0 : i.unitPrice;
     return sum + (remainingQty * unitPrice);
   }, 0));
   const totalEarned = totalSoldValue + totalPendingValue;
   const toBreakEven = totalCost - totalEarned;
-  const totalProfit = items.reduce((sum, i) => {
-    if (i.status === '未售出') return sum;
-    const totalSell = (i.sells || []).reduce((s, v) => s + (v.total || 0), 0);
-    return sum + round2(totalSell - (i.cost || 0));
-  }, 0);
-  const soldCount = items.filter(i => i.status === '已售出').length;
+  const totalProfit = round2(items.reduce((sum, i) => sum + (getItemSaleProfit(i) || 0), 0));
+  const soldCount = items.filter(i => i.status !== '待签收' && getItemSoldQty(i) > 0 && getItemRemainingQty(i) <= 0).length;
   const pendingCount = items.filter(i => i.status === '待签收').length;
-  const unsoldCount = items.filter(i => i.status === '未售出').length;
+  const partialCount = items.filter(i => i.status !== '待签收' && getItemSoldQty(i) > 0 && getItemRemainingQty(i) > 0).length;
+  const unsoldCount = items.filter(i => i.status !== '待签收' && getItemRemainingQty(i) > 0).length;
 
   function SortIcon({ field }) {
     if (sortField !== field) return <span className="sort-icon">⇅</span>;
@@ -4949,17 +4985,23 @@ function App({ onLock }) {
   }
 
   const statusBadgeClass = (item) => {
-    if (item.status === '已售出') return 'status-badge status-sold';
+    const displayStatus = getItemInventoryStatus(item);
+    if (displayStatus === '已售出') return 'status-badge status-sold';
+    if (displayStatus === '部分售出') return 'status-badge status-partial';
     if (item.status === '待签收') return 'status-badge status-signed';
     return 'status-badge status-unsold';
   };
   const statusBadgeText = (item) => {
-    if (item.status === '已售出') return '● 已售出';
+    const displayStatus = getItemInventoryStatus(item);
+    if (displayStatus === '已售出') return '● 已售出';
+    if (displayStatus === '部分售出') return '◐ 部分售出';
     if (item.status === '待签收') return '● 待签收';
     return '○ 未售出';
   };
   const rowClass = (item) => {
-    if (item.status === '已售出') return 'status-sold';
+    const displayStatus = getItemInventoryStatus(item);
+    if (displayStatus === '已售出') return 'status-sold';
+    if (displayStatus === '部分售出') return 'status-partial';
     if (item.status === '待签收') return 'status-signed';
     return '';
   };
@@ -5037,7 +5079,7 @@ function App({ onLock }) {
         <div className="stat-card blue">
           <div className="stat-label">库存成本</div>
           <div className="stat-value">{formatMoney(totalCost)}</div>
-          <div className="stat-sub">{unsoldCount} 种未售出</div>
+          <div className="stat-sub">{unsoldCount} 种在库{partialCount > 0 ? `，${partialCount} 种部分售出` : ''}</div>
           <div className="stat-detail">
             <div className="stat-detail-label">{toBreakEven > 0 ? '距回本还差' : '已超额回本'}</div>
             <div style={{fontSize:18,fontWeight:700,color:toBreakEven > 0 ? 'var(--orange)' : 'var(--green)'}}>{toBreakEven > 0 ? formatMoney(toBreakEven) : formatMoney(-toBreakEven)}</div>
@@ -5047,7 +5089,7 @@ function App({ onLock }) {
         <div className="stat-card green">
           <div className="stat-label">已售总额</div>
           <div className="stat-value green">{formatMoney(totalSoldValue)}</div>
-          <div className="stat-sub">{soldCount} 种已售出</div>
+          <div className="stat-sub">{soldCount} 种全量售出{partialCount > 0 ? `，另 ${partialCount} 种部分售出` : ''}</div>
           <div className="stat-detail">
             <div className="stat-detail-label">当前利润</div>
             <div style={{fontSize:18,fontWeight:700,color:totalProfit >= 0 ? 'var(--green)' : 'var(--red)'}}>{totalProfit >= 0 ? '+' : ''}{formatMoney(totalProfit)}</div>
@@ -5208,7 +5250,7 @@ function App({ onLock }) {
                   </td>
                   <td className="price-cell" style={{textAlign:'right'}}>{item.qty ?? '—'}</td>
                   <td className="price-cell" style={{textAlign:'right', color: 'var(--text-3)'}}>
-                    {(item.qty ?? 0) - (item.sells || []).reduce((s, v) => s + (v.qty || 0), 0)}
+                    {getItemRemainingQty(item)}
                   </td>
                   <td className="price-cell" style={{textAlign:'right'}}>{item.cost !== null ? formatMoney(item.cost) : '—'}</td>
                   <td className="price-cell" style={{textAlign:'right'}}>
@@ -5234,18 +5276,18 @@ function App({ onLock }) {
                     )}
                   </td>
                   <td className="price-cell" style={{textAlign:'right', color: 'var(--green)', fontWeight:600}}>
-                    {(item.sells || []).reduce((s, v) => s + (v.qty || 0), 0) > 0
+                    {getItemSoldQty(item) > 0
                       ? (() => {
-                          const totalQty = (item.sells || []).reduce((s, v) => s + (v.qty || 0), 0);
-                          const totalVal = (item.sells || []).reduce((s, v) => s + (v.total || 0), 0);
+                          const totalQty = getItemSoldQty(item);
+                          const totalVal = getItemSoldValue(item);
                           return `${totalQty}张 ¥${totalVal.toFixed(2)}`;
                         })()
                       : '—'}
                   </td>
                   <td className="price-cell" style={{textAlign:'right'}}>
-                    {item.profit !== null ? (
-                      <span className={item.profit > 0 ? 'profit-positive' : item.profit < 0 ? 'profit-negative' : 'profit-zero'}>
-                        {item.profit > 0 ? '+' : ''}{formatMoney(item.profit)}
+                    {getItemSaleProfit(item) !== null ? (
+                      <span className={getItemSaleProfit(item) > 0 ? 'profit-positive' : getItemSaleProfit(item) < 0 ? 'profit-negative' : 'profit-zero'}>
+                        {getItemSaleProfit(item) > 0 ? '+' : ''}{formatMoney(getItemSaleProfit(item))}
                       </span>
                     ) : '—'}
                   </td>
