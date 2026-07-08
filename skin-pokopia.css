@@ -441,10 +441,17 @@ tbody tr.status-signed {
 
 .status-badge,
 .language-badge,
+.listed-badge,
 .price-delta,
 .color-legend-item {
   border-radius: 999px !important;
   font-weight: 900 !important;
+}
+
+.listed-badge {
+  background: rgba(62, 207, 142, 0.14) !important;
+  color: #74f2b7 !important;
+  border-color: rgba(62, 207, 142, 0.32) !important;
 }
 
 .status-badge {
@@ -488,8 +495,8 @@ td.action-col {
   position: sticky !important;
   right: 0 !important;
   z-index: 5 !important;
-  width: 164px !important;
-  min-width: 164px;
+  width: 208px !important;
+  min-width: 208px;
   background: rgba(9, 15, 12, 0.96) !important;
   box-shadow: -1px 0 0 rgba(62,207,142,0.12), -18px 0 28px rgba(0,0,0,0.28) !important;
   backdrop-filter: blur(10px);

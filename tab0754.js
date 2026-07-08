@@ -1,5 +1,8 @@
 // Tab0754 组件 — 独立JS文件，不经过Babel编译
 // 注意：不使用任何展开运算符(...)，避免兼容问题
+if (typeof React === 'undefined') {
+  throw new Error('React 未加载，无法初始化 Tab0754');
+}
 var STORAGE_0754 = '0754-sold-records';
 
 function Tab0754(props) {

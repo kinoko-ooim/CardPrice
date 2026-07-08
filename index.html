@@ -356,7 +356,7 @@
       overflow-y: hidden;
     }
     table { width: 100%; border-collapse: collapse; }
-    .main-card-table { min-width: 1380px; }
+    .main-card-table { min-width: 1460px; }
     .old-card-table { min-width: 1080px; }
     thead { background: #111111; }
     th {
@@ -396,7 +396,7 @@
       position: sticky;
       right: 0;
       z-index: 2;
-      min-width: 132px;
+      min-width: 188px;
       background: #171717;
       box-shadow: -12px 0 18px rgba(0,0,0,0.22);
     }
@@ -413,6 +413,42 @@
       gap: 6px;
       justify-content: flex-end;
       white-space: nowrap;
+    }
+    .action-btn-listing {
+      color: var(--green);
+      border-color: var(--green-border);
+      background: var(--green-bg);
+    }
+    .action-btn-listing:hover {
+      color: var(--primary-light);
+      border-color: rgba(62,207,142,0.48);
+      background: rgba(62,207,142,0.18);
+    }
+    .listing-copy-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .listing-field {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #0f0f0f;
+      padding: 10px 12px;
+    }
+    .listing-label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 11px;
+      color: var(--text-3);
+      font-family: var(--mono-font);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+    .listing-value {
+      min-height: 20px;
+      color: var(--text);
+      font-weight: 600;
+      word-break: break-word;
     }
 
     .card-name { font-weight: 500; font-size: 15px; color: var(--text); }
@@ -465,6 +501,41 @@
       font-weight: 800;
       letter-spacing: 0;
       white-space: nowrap;
+    }
+    .listed-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      height: 22px;
+      padding: 0 7px;
+      border-radius: var(--radius-pill);
+      border: 1px solid rgba(62,207,142,0.38);
+      background: rgba(62,207,142,0.12);
+      color: var(--green);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0;
+      white-space: nowrap;
+    }
+    .listed-badge-remove {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 14px;
+      border: 0;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.10);
+      color: inherit;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 900;
+      line-height: 1;
+      padding: 0;
+    }
+    .listed-badge-remove:hover {
+      background: rgba(255,255,255,0.20);
+      color: var(--primary-light);
     }
     .price-note-wrap {
       display: flex;
@@ -791,7 +862,7 @@
       .stats-bar { grid-template-columns: repeat(2, 1fr); padding: 12px 16px 8px; top: 96px; }
       .toolbar { flex-direction: column; padding: 12px 16px; }
       .filter-group { width: 100%; overflow-x: auto; flex-wrap: nowrap; }
-      .main-card-table { min-width: 1380px; }
+      .main-card-table { min-width: 1460px; }
       .old-card-table { min-width: 1080px; }
       .add-form-grid { grid-template-columns: 1fr 1fr; }
       .add-form { padding: 0 16px; }
@@ -905,8 +976,8 @@ const SUPABASE_IMAGE_LOOKUP_FUNCTION = 'card-image-lookup-v2';
 const SUPABASE_IMAGE_LOOKUP_FUNCTION_LEGACY = 'card-image-lookup';
 const SUPABASE_SCREENSHOT_AI_FUNCTION = 'card-screenshot-extract-v1';
 const TCGCOLLECTOR_R_JINA_PREFIX = 'https://r.jina.ai/http://';
-const TCGCOLLECTOR_SETS_URL = 'https://www.tcgcollector.com/sets/jp?cardCountMode=anyCardVariant&releaseDateOrder=newToOld&displayAs=images';
-const TCGCOLLECTOR_SEARCH_URL = 'https://www.tcgcollector.com/cards/jp?cardSource=inCardVariant&releaseDateOrder=newToOld&displayAs=images&cardSearch={query}';
+const TCGCOLLECTOR_SETS_URL = 'https://www.tcgcollector.com/sets/{region}?cardCountMode=anyCardVariant&releaseDateOrder=newToOld&displayAs=images';
+const TCGCOLLECTOR_SEARCH_URL = 'https://www.tcgcollector.com/cards/{region}?cardSource=inCardVariant&releaseDateOrder=newToOld&displayAs=images&cardSearch={query}';
 const TCGCOLLECTOR_LOCAL_SET_NAME_MAP = {
   SV1S: 'Scarlet ex',
   SV1V: 'Violet ex',
@@ -932,7 +1003,8 @@ const TCGCOLLECTOR_LOCAL_SET_NAME_MAP = {
   SV9A: 'Heat Wave Arena',
   SV10: 'The Glory of Team Rocket',
   SV11B: 'Black Bolt',
-  SV11W: 'White Flare'
+  SV11W: 'White Flare',
+  CBB5C: 'Gem Pack Vol. 5'
 };
 const OLD_CARD_CLOUD_SCOPE = 'old-cards';
 const SOLD_0754_CLOUD_SCOPE = '0754-sold';
@@ -1122,6 +1194,81 @@ function priceChangeSortValue(item, field) {
   if (info.percent !== null && Number.isFinite(info.percent)) return info.percent;
   return info.delta;
 }
+function getJhsListingBasePrice(item) {
+  const reference = item?.isPsa10 ? normalizeOptionalPrice(item?.jhsPsa10Price) : normalizeOptionalPrice(item?.jhsRawPrice);
+  if (reference !== null) return reference;
+  return normalizeOptionalPrice(item?.unitPrice) ?? 0;
+}
+function getJhsListingPrice(item) {
+  const basePrice = getJhsListingBasePrice(item);
+  const mode = item?.jhsListingPriceMode || 'base';
+  if (mode === 'fixed') {
+    const fixedPrice = normalizeOptionalPrice(item?.jhsListingFixedPrice);
+    if (fixedPrice !== null) return fixedPrice;
+  }
+  if (mode === 'markup') {
+    const markupPercent = normalizeOptionalPrice(item?.jhsListingMarkupPercent) ?? 0;
+    return round2(basePrice * (1 + markupPercent / 100));
+  }
+  return basePrice;
+}
+function buildJhsListingDraft(item) {
+  const remainingQty = Math.max(1, getItemRemainingQty(item) || item?.qty || 1);
+  const listingPrice = getJhsListingPrice(item);
+  const basePrice = getJhsListingBasePrice(item);
+  const cardCode = String(item?.jhsSearchCode || item?.cardCode || '').trim();
+  const language = normalizeCardLanguage(item?.jhsGameLabel || item?.cardLanguage || '');
+  const gameLabel = jhsSearchGameLabel(language);
+  const listingCategory = item?.isPsa10 ? '评级卡' : '非评级卡';
+  const condition = item?.isPsa10 ? 'PSA' : '流通品相';
+  const titleParts = [item?.name || '未命名卡牌'];
+  if (cardCode) titleParts.push(cardCode);
+  if (language) titleParts.push(languageShortLabel(language));
+  if (item?.isPsa10) titleParts.push('PSA10');
+  const title = titleParts.filter(Boolean).join(' ');
+  const noteLines = [
+    `卡牌：${item?.name || ''}`,
+    cardCode ? `编号：${cardCode}` : '',
+    language ? `语言：${language}` : '',
+    `商品类别：${listingCategory}`,
+    `品相：${condition}`,
+    `数量：${remainingQty}`,
+    `价格：¥${listingPrice.toFixed(2)}`,
+    item?.jhsPriceUpdatedAt ? `参考价更新时间：${formatPriceUpdatedAt(item.jhsPriceUpdatedAt)}` : ''
+  ].filter(Boolean);
+  return {
+    title,
+    cardCode,
+    language,
+    gameLabel,
+    listingCategory,
+    condition,
+    price: listingPrice,
+    basePrice,
+    qty: remainingQty,
+    note: String(item?.jhsListingNote || '').trim() || noteLines.join('\n'),
+    searchUrl: `https://www.jihuanshe.com/search?keyword=${encodeURIComponent(cardCode || item?.name || '')}`,
+    appUrl: 'jihuanshe://'
+  };
+}
+function buildJhsListingPayload(item, options = {}) {
+  const draft = buildJhsListingDraft(item);
+  const note = options.note !== undefined
+    ? String(options.note || '').trim()
+    : String(item?.jhsListingNote || '').trim();
+  const overridePrice = normalizeOptionalPrice(options.price);
+  return {
+    cardCode: draft.cardCode,
+    language: draft.language,
+    gameLabel: draft.gameLabel,
+    isPsa10: !!item?.isPsa10,
+    price: overridePrice !== null ? overridePrice : draft.price,
+    qty: draft.qty,
+    note,
+    imageUrl: item?.imageUrl || '',
+    confirmAdd: options.confirmAdd !== undefined ? !!options.confirmAdd : true
+  };
+}
 function normalizeCardLanguage(value) {
   const text = String(value || '').trim();
   const aliases = {
@@ -1155,6 +1302,10 @@ function languageShortLabel(value) {
   if (normalized.includes('日')) return '日';
   if (normalized.includes('英')) return '英';
   return normalized ? normalized.slice(0, 1) : '';
+}
+function jhsSearchGameLabel(value) {
+  const normalized = normalizeCardLanguage(value);
+  return normalized === '其他' ? '' : normalized;
 }
 function normalizeSells(item) {
   if (Array.isArray(item?.sells)) {
@@ -1233,7 +1384,13 @@ function normalizeItem(raw, index) {
     jhsPriceNote: raw.jhsPriceNote || raw.marketPriceNote || '',
     jhsPriceHistory: normalizePriceHistory(raw.jhsPriceHistory || raw.priceHistory),
     jhsSearchCode: String(raw.jhsSearchCode || raw.jhsQueryCode || '').trim(),
-    jhsGameLabel: raw.jhsGameLabel || raw.jhsGame || ''
+    jhsGameLabel: raw.jhsGameLabel || raw.jhsGame || '',
+    jhsListingPriceMode: ['base', 'fixed', 'markup'].includes(raw.jhsListingPriceMode) ? raw.jhsListingPriceMode : 'base',
+    jhsListingFixedPrice: normalizeOptionalPrice(raw.jhsListingFixedPrice),
+    jhsListingMarkupPercent: normalizeOptionalPrice(raw.jhsListingMarkupPercent),
+    jhsListingNote: String(raw.jhsListingNote || '').trim(),
+    jhsListed: raw.jhsListed === true || raw.jhsListed === 'true',
+    jhsListedAt: raw.jhsListedAt || ''
   };
 
   if (normalized.imageUrl && !normalized.cardCode) {
@@ -1425,6 +1582,24 @@ async function fetchTcgCollectorProxyText(url) {
 }
 function parseCardCodeForLookup(rawCode) {
   const cleaned = String(rawCode || '').trim().replace(/\s+/g, '').replace(/[–—_]/g, '-');
+  const gemPackMatch = cleaned.match(/^([A-Za-z0-9]+)-(\d{1,2})(\d{2})\/(\d{2})$/);
+  if (gemPackMatch) {
+    const setCode = gemPackMatch[1];
+    const variantPrefix = String(gemPackMatch[2] || '').padStart(2, '0');
+    const cardNum = String(gemPackMatch[3] || '').padStart(2, '0');
+    const denominator = String(gemPackMatch[4] || '').padStart(2, '0');
+    const collectorCardNumber = `${variantPrefix}${cardNum}/${denominator}`;
+    return {
+      raw: rawCode,
+      setCode,
+      cardNum,
+      denominator,
+      variantPrefix,
+      cardNumber: `${cardNum}/${denominator}`,
+      collectorCardNumber,
+      canonical: `${setCode}-${cardNum}/${denominator}`
+    };
+  }
   let match = cleaned.match(/^(.+)-(\d{1,3})(?:\/([A-Za-z0-9.-]+))?$/);
   if (!match) {
     match = cleaned.match(/^([A-Za-z0-9.-]+?)(\d{2,3})(?:\/([A-Za-z0-9.-]+))?$/);
@@ -1441,7 +1616,9 @@ function parseCardCodeForLookup(rawCode) {
     setCode,
     cardNum,
     denominator,
+    variantPrefix: '',
     cardNumber,
+    collectorCardNumber: cardNumber,
     canonical: `${setCode}-${cardNumber}`
   };
 }
@@ -1472,6 +1649,9 @@ function shouldUseTcgMikFallback(cardCode) {
 }
 function getExpectedCollectorNumbers(code) {
   const values = new Set();
+  if (code.collectorCardNumber) {
+    values.add(normalizeCollectorToken(code.collectorCardNumber));
+  }
   values.add(normalizeCollectorToken(code.cardNumber));
   if (!code.denominator) {
     values.add(normalizeCollectorToken(`${code.cardNum}/${code.setCode}`));
@@ -1479,10 +1659,24 @@ function getExpectedCollectorNumbers(code) {
   return values;
 }
 let tcgCollectorSetCodeMapPromise = null;
-async function loadTcgCollectorSetCodeMap() {
+function getTcgCollectorRegionForCode(setCode) {
+  const code = String(setCode || '').trim().toUpperCase();
+  if (code.startsWith('CB') || code.startsWith('CS') || code.startsWith('CP') || code.startsWith('P-CN')) {
+    return 'cn';
+  }
+  return 'jp';
+}
+async function loadTcgCollectorSetCodeMap(region) {
+  const targetRegion = region || 'jp';
+  const cacheKey = `__region__${targetRegion}`;
   if (!tcgCollectorSetCodeMapPromise) {
-    tcgCollectorSetCodeMapPromise = (async () => {
-      const markdown = await fetchTcgCollectorProxyText(TCGCOLLECTOR_SETS_URL);
+    tcgCollectorSetCodeMapPromise = {};
+  }
+  if (!tcgCollectorSetCodeMapPromise[cacheKey]) {
+    tcgCollectorSetCodeMapPromise[cacheKey] = (async () => {
+      const markdown = await fetchTcgCollectorProxyText(
+        TCGCOLLECTOR_SETS_URL.replace('{region}', targetRegion)
+      );
       const mapping = { ...TCGCOLLECTOR_LOCAL_SET_NAME_MAP };
       const lines = markdown.split('\n');
       for (const rawLine of lines) {
@@ -1507,16 +1701,18 @@ async function loadTcgCollectorSetCodeMap() {
       return mapping;
     })();
   }
-  return await tcgCollectorSetCodeMapPromise;
+  return await tcgCollectorSetCodeMapPromise[cacheKey];
 }
 async function searchCardImageViaTcgCollector(cardCode) {
   const code = parseCardCodeForLookup(cardCode);
-  const setNameMap = await loadTcgCollectorSetCodeMap();
+  const region = getTcgCollectorRegionForCode(code.setCode);
+  const setNameMap = await loadTcgCollectorSetCodeMap(region);
   const preferredSetName = setNameMap[code.setCode] || setNameMap[String(code.setCode || '').toUpperCase()] || '';
+  const searchNumber = code.collectorCardNumber || code.cardNumber;
   const queries = preferredSetName
-    ? [`${code.cardNumber} ${preferredSetName}`, `${preferredSetName} ${code.cardNumber}`, `${code.cardNum} ${preferredSetName}`, `${code.setCode} ${code.cardNum}`, code.cardNumber]
+    ? [`${searchNumber} ${preferredSetName}`, `${preferredSetName} ${searchNumber}`, `${code.cardNum} ${preferredSetName}`, `${code.setCode} ${code.cardNum}`, searchNumber]
     : (code.denominator
-      ? [code.cardNumber, `${code.setCode} ${code.cardNum}`]
+      ? [searchNumber, `${code.setCode} ${code.cardNum}`]
       : [`${code.cardNum} ${code.setCode}`, `${code.setCode} ${code.cardNum}`, `${code.cardNum}/${code.setCode}`]);
   const expectedNumbers = getExpectedCollectorNumbers(code);
   let lastError = null;
@@ -1525,7 +1721,11 @@ async function searchCardImageViaTcgCollector(cardCode) {
     const query = encodeURIComponent(String(rawQuery || '').trim());
     if (!query) continue;
     try {
-      const markdown = await fetchTcgCollectorProxyText(TCGCOLLECTOR_SEARCH_URL.replace('{query}', query));
+      const markdown = await fetchTcgCollectorProxyText(
+        TCGCOLLECTOR_SEARCH_URL
+          .replace('{region}', region)
+          .replace('{query}', query)
+      );
       const entryPattern = /\[\!\[Image \d+: ([^\]]+)\]\((https:\/\/static\.tcgcollector\.com\/content\/images\/[^\)]+)\)\s+!\[Image \d+: ([^\]]+)\]\([^\)]*\)\s+([A-Za-z0-9.-]+(?:\/[A-Za-z0-9.-]+)+).*?\]\((https:\/\/www\.tcgcollector\.com\/cards\/\d+\/[^ \)]+)/gs;
       const matches = [];
       let match = null;
@@ -1784,6 +1984,56 @@ function getDirectAiErrorMessage(error) {
     return '直连 AI API 被浏览器或 CORS 拦截，请让 API 网关允许当前页面来源（file:// 通常是 Origin null），或改用 Supabase 模式。';
   }
   return message || '直连 AI API 调用失败';
+}
+const JHS_LISTING_HELPER_BASE_URL = 'http://127.0.0.1:8767';
+const LOCAL_DASHBOARD_SERVER_BASE_URL = 'http://127.0.0.1:8000';
+function getJhsListingServiceErrorMessage(error) {
+  const message = String(error?.message || error || '').trim();
+  if (/Failed to fetch|Load failed|NetworkError|CORS|AbortError/i.test(message)) {
+    return '本地上架服务未启动或浏览器无法连接，请用 python3 scripts/dashboard_server.py 打开页面，或手动运行：python3 scripts/jhs_listing_helper.py';
+  }
+  return message || '自动上架失败';
+}
+async function checkJhsListingHelperReady() {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 2500);
+  try {
+    const response = await fetch(`${JHS_LISTING_HELPER_BASE_URL}/health`, {
+      method: 'GET',
+      cache: 'no-store',
+      signal: controller.signal
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      throw new Error(result.error || `本地上架服务健康检查失败 (${response.status})`);
+    }
+    return result;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function startJhsListingHelperFromDashboardServer() {
+  const response = await fetch(`${LOCAL_DASHBOARD_SERVER_BASE_URL}/start-jhs-listing-helper`, {
+    method: 'POST',
+    cache: 'no-store'
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.ok) {
+    throw new Error(result.error || '本地上架服务自动启动失败');
+  }
+  return result;
+}
+async function assertJhsListingHelperReady() {
+  try {
+    return await checkJhsListingHelperReady();
+  } catch (firstError) {
+    try {
+      await startJhsListingHelperFromDashboardServer();
+      return await checkJhsListingHelperReady();
+    } catch (startError) {
+      throw new Error(getJhsListingServiceErrorMessage(startError) || getJhsListingServiceErrorMessage(firstError));
+    }
+  }
 }
 async function extractScreenshotItemsViaDirectApi(config, imageDataUrl) {
   const headers = {
@@ -2679,6 +2929,409 @@ function CloudConfigModal({
               <button className="btn btn-secondary" onClick={onClose}>取消</button>
               <button className="btn btn-primary" onClick={onSave} disabled={saving}>{saving ? '连接中...' : '保存并连接'}</button>
             </div>
+          </div>
+        </div>
+      </div>
+    </ModalPortal>
+  );
+}
+
+function JhsListingModal({ item, onSave, onListed, onClose, onToast }) {
+  const initialMode = item.jhsListingPriceMode || (item.jhsListingFixedPrice !== undefined && item.jhsListingFixedPrice !== null ? 'fixed' : 'base');
+  const [priceMode, setPriceMode] = useState(initialMode);
+  const [fixedPrice, setFixedPrice] = useState(item.jhsListingFixedPrice ?? '');
+  const [markupPercent, setMarkupPercent] = useState(item.jhsListingMarkupPercent ?? '');
+  const [listingNote, setListingNote] = useState(item.jhsListingNote || '');
+  const [confirmAdd, setConfirmAdd] = useState(true);
+  const [listingBusy, setListingBusy] = useState(false);
+  const [listingResult, setListingResult] = useState(null);
+  const buildListedItem = (baseItem) => ({
+    ...baseItem,
+    jhsListed: true,
+    jhsListedAt: new Date().toISOString()
+  });
+  const previewItem = {
+    ...item,
+    jhsListingPriceMode: priceMode,
+    jhsListingFixedPrice: fixedPrice === '' ? null : fixedPrice,
+    jhsListingMarkupPercent: markupPercent === '' ? null : markupPercent,
+    jhsListingNote: listingNote
+  };
+  const baseDraft = buildJhsListingDraft(item);
+  const previewDraft = buildJhsListingDraft(previewItem);
+  const draft = buildJhsListingDraft(item);
+  const startListing = async () => {
+    const savedItem = handleSave({silent: true});
+    if (!savedItem) return;
+    setListingBusy(true);
+    setListingResult(null);
+    try {
+      const payload = {
+        cardCode: draft.cardCode,
+        language: draft.language,
+        gameLabel: draft.gameLabel,
+        isPsa10: !!item.isPsa10,
+        price: previewDraft.price,
+        qty: draft.qty,
+        note: listingNote.trim(),
+        imageUrl: item.imageUrl || '',
+        confirmAdd
+      };
+      await assertJhsListingHelperReady();
+      const response = await fetch(`${JHS_LISTING_HELPER_BASE_URL}/listings`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || '本地上架服务调用失败');
+      }
+      if (result.status === 'listed') {
+        onListed?.(buildListedItem(savedItem), result);
+        onClose?.();
+      } else {
+        setListingResult(result);
+        onToast?.('已填好上架页，等待你确认添加 ✓');
+      }
+    } catch (error) {
+      const message = getJhsListingServiceErrorMessage(error);
+      setListingResult({ok:false, error:message});
+      onToast?.(`自动上架失败：${message}`);
+    } finally {
+      setListingBusy(false);
+    }
+  };
+  const handleSave = (options = {}) => {
+    const nextFixedPrice = fixedPrice === '' ? null : normalizeOptionalPrice(fixedPrice);
+    const nextMarkupPercent = markupPercent === '' ? null : normalizeOptionalPrice(markupPercent);
+    if (priceMode === 'fixed' && nextFixedPrice === null) {
+      onToast?.('请填写具体上架价格');
+      return false;
+    }
+    if (priceMode === 'markup' && nextMarkupPercent === null) {
+      onToast?.('请填写加价百分比');
+      return false;
+    }
+    const updated = {
+      ...item,
+      jhsListingPriceMode: priceMode,
+      jhsListingFixedPrice: priceMode === 'fixed' ? nextFixedPrice : null,
+      jhsListingMarkupPercent: priceMode === 'markup' ? nextMarkupPercent : null,
+      jhsListingNote: listingNote.trim()
+    };
+    onSave(updated, options);
+    return updated;
+  };
+  const markManualListed = () => {
+    const savedItem = handleSave({silent: true});
+    if (!savedItem) return;
+    onListed?.(buildListedItem(savedItem), listingResult || {status: 'listed'});
+    onClose?.();
+  };
+
+  return (
+    <ModalPortal>
+      <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+        <div className="modal" style={{maxWidth: 640}}>
+          <div className="modal-header">
+            <div className="modal-title">上架集换社</div>
+            <button className="modal-close" onClick={onClose}>×</button>
+          </div>
+          <div className="modal-body">
+            <div className="modal-section-title">上架信息</div>
+            <div className="listing-copy-grid">
+              <div className="listing-field">
+                <span className="listing-label">商品标题</span>
+                <div className="listing-value">{draft.title}</div>
+              </div>
+              <div className="listing-field">
+                <span className="listing-label">集换社搜索</span>
+                <div className="listing-value">{draft.cardCode || item.name}</div>
+              </div>
+              <div className="listing-field">
+                <span className="listing-label">价格</span>
+                <div className="listing-value">¥{previewDraft.price.toFixed(2)}</div>
+              </div>
+              <div className="listing-field">
+                <span className="listing-label">数量</span>
+                <div className="listing-value">{draft.qty}</div>
+              </div>
+              <div className="listing-field">
+                <span className="listing-label">商品类别</span>
+                <div className="listing-value">{draft.listingCategory}</div>
+              </div>
+              <div className="listing-field">
+                <span className="listing-label">品相 / 评级</span>
+                <div className="listing-value">{draft.condition}</div>
+              </div>
+              <div className="listing-field">
+                <span className="listing-label">语言</span>
+                <div className="listing-value">{draft.language || '未标识'}</div>
+              </div>
+            </div>
+
+            <div className="modal-section-title" style={{marginTop:20}}>上架设置</div>
+            <div className="form-group">
+              <label className="form-label">上架价格</label>
+              <div className="status-options">
+                <div className={`status-option ${priceMode === 'base' ? 'selected-sold' : ''}`} onClick={() => setPriceMode('base')}>参考价</div>
+                <div className={`status-option ${priceMode === 'fixed' ? 'selected-sold' : ''}`} onClick={() => setPriceMode('fixed')}>具体价格</div>
+                <div className={`status-option ${priceMode === 'markup' ? 'selected-sold' : ''}`} onClick={() => setPriceMode('markup')}>加价百分比</div>
+              </div>
+              <div style={{fontSize:11,color:'var(--text-3)',marginTop:6}}>
+                当前参考价 {formatMoney(baseDraft.basePrice)}
+              </div>
+            </div>
+            {priceMode === 'fixed' && (
+              <div className="form-group">
+                <label className="form-label">具体上架价格 (¥)</label>
+                <input className="form-input" type="number" step="0.01" value={fixedPrice} onChange={e => setFixedPrice(e.target.value)} placeholder={baseDraft.basePrice.toFixed(2)} />
+              </div>
+            )}
+            {priceMode === 'markup' && (
+              <div className="form-group">
+                <label className="form-label">加价百分比 (%)</label>
+                <input className="form-input" type="number" step="0.1" value={markupPercent} onChange={e => setMarkupPercent(e.target.value)} placeholder="如：10" />
+              </div>
+            )}
+
+            <div className="modal-section-title" style={{marginTop:20}}>上架备注</div>
+            <textarea className="form-input" value={listingNote} onChange={e => setListingNote(e.target.value)} style={{minHeight: 132, resize: 'vertical', lineHeight: 1.6}} />
+
+            <div className="form-group" style={{marginTop:14}}>
+              <label className={`form-check-option ${confirmAdd ? 'active' : ''}`}>
+                <input
+                  type="checkbox"
+                  checked={confirmAdd}
+                  onChange={e => setConfirmAdd(e.target.checked)}
+                />
+                <span>自动点击“添加”完成上架</span>
+              </label>
+              <div style={{fontSize:11,color:'var(--text-3)',marginTop:6}}>
+                关闭时会自动填到添加页并停住，让你检查后手动点击“添加”。
+              </div>
+            </div>
+
+            <div className="modal-section-title" style={{marginTop:20}}>上架流程</div>
+            <div style={{display:'grid',gap:8,fontSize:13,color:'var(--text-2)',lineHeight:1.7}}>
+              <div>1. 用编号和语言搜索卡片：{draft.cardCode || item.name} / {draft.language || '未标识'}</div>
+              <div>2. 进入卡片详情后点击“出售”。</div>
+              <div>3. 商品类别选择“{draft.listingCategory}”，{item.isPsa10 ? '评级类型选择“PSA”。' : '卡牌品相选择“流通品相”。'}</div>
+              <div>4. 填入价格 ¥{previewDraft.price.toFixed(2)}、库存 {draft.qty}、备注，并上传商品图。</div>
+              <div>5. 点击“添加”完成上架。</div>
+            </div>
+
+            <div style={{marginTop:16, padding:'12px 14px', borderRadius:10, background:'rgba(62,207,142,0.08)', border:'1px solid rgba(62,207,142,0.22)', color:'var(--text-2)', fontSize:12, lineHeight:1.7}}>
+              需要先启动本地上架服务：<code>python3 scripts/jhs_listing_helper.py</code>。
+            </div>
+            {listingResult && (
+              <div style={{marginTop:12, padding:'12px 14px', borderRadius:10, background: listingResult.ok ? 'rgba(62,207,142,0.08)' : 'rgba(255,107,126,0.10)', border:`1px solid ${listingResult.ok ? 'rgba(62,207,142,0.22)' : 'rgba(255,107,126,0.24)'}`, color: listingResult.ok ? 'var(--text-2)' : 'var(--red)', fontSize:12, lineHeight:1.7}}>
+                {listingResult.ok ? (
+                  <div>
+                    <div style={{fontWeight:800,color:'var(--text)',marginBottom:4}}>{listingResult.status === 'listed' ? '已完成上架' : '已填好上架页'}</div>
+                    {(listingResult.steps || []).map((step, index) => <div key={index}>{index + 1}. {step}</div>)}
+                    {listingResult.status !== 'listed' && (
+                      <button className="btn btn-primary" style={{marginTop:10}} onClick={markManualListed} disabled={listingBusy}>已手动添加，标记已上架</button>
+                    )}
+                  </div>
+                ) : (
+                  <div>{listingResult.error || '自动上架失败'}</div>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="modal-footer" style={{justifyContent:'flex-end', flexWrap:'wrap'}}>
+            <button className="btn btn-secondary" onClick={() => handleSave()} disabled={listingBusy}>保存设置</button>
+            <button className="btn btn-primary" onClick={startListing} disabled={listingBusy}>{listingBusy ? '上架中...' : '上架'}</button>
+          </div>
+        </div>
+      </div>
+    </ModalPortal>
+  );
+}
+
+function BulkJhsListingModal({ items, onListed, onClose, onToast }) {
+  const [queueItems] = useState(() => items);
+  const [priceById, setPriceById] = useState(() => {
+    const initial = {};
+    items.forEach(item => {
+      initial[item.id] = getJhsListingPrice(item).toFixed(2);
+    });
+    return initial;
+  });
+  const [confirmAdd, setConfirmAdd] = useState(true);
+  const [skipListed, setSkipListed] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [currentIndex, setCurrentIndex] = useState(-1);
+  const [results, setResults] = useState([]);
+  const eligibleItems = useMemo(() => (
+    queueItems.filter(item => !skipListed || !item.jhsListed)
+  ), [queueItems, skipListed]);
+  const blockedItems = useMemo(() => (
+    eligibleItems.filter(item => !buildJhsListingDraft(item).cardCode || (normalizeOptionalPrice(priceById[item.id]) ?? 0) <= 0)
+  ), [eligibleItems, priceById]);
+  const canStart = eligibleItems.length > 0 && blockedItems.length === 0 && !busy;
+  const updateItemPrice = (id, value) => {
+    setPriceById(prev => ({...prev, [id]: value}));
+  };
+
+  const runBulkListing = async () => {
+    if (!canStart) {
+      onToast?.(eligibleItems.length === 0 ? '没有可批量上架的商品' : '有商品缺少编号或价格，不能批量上架');
+      return;
+    }
+    setBusy(true);
+    setResults([]);
+    setCurrentIndex(0);
+    try {
+      await assertJhsListingHelperReady();
+      const finalResults = [];
+      for (let index = 0; index < eligibleItems.length; index += 1) {
+        const item = eligibleItems[index];
+        setCurrentIndex(index);
+        const payload = buildJhsListingPayload(item, {
+          confirmAdd,
+          price: normalizeOptionalPrice(priceById[item.id])
+        });
+        try {
+          const response = await fetch(`${JHS_LISTING_HELPER_BASE_URL}/listings`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+          });
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok || !result.ok) {
+            throw new Error(result.error || '本地上架服务调用失败');
+          }
+          const nextResult = {id: item.id, name: item.name, ok: true, status: result.status, steps: result.steps || []};
+          finalResults.push(nextResult);
+          setResults([...finalResults]);
+          if (result.status === 'listed') {
+            onListed?.({
+              ...item,
+              jhsListed: true,
+              jhsListedAt: new Date().toISOString()
+            }, result);
+          } else {
+            onToast?.(`已停在「${item.name}」添加页，请手动确认后再继续`);
+            break;
+          }
+        } catch (error) {
+          const message = getJhsListingServiceErrorMessage(error);
+          finalResults.push({id: item.id, name: item.name, ok: false, error: message});
+          setResults([...finalResults]);
+          onToast?.(`批量上架停止：${item.name} ${message}`);
+          break;
+        }
+      }
+      const listedCount = finalResults.filter(result => result.ok && result.status === 'listed').length;
+      if (listedCount > 0) onToast?.(`批量上架完成 ${listedCount}/${eligibleItems.length} ✓`);
+    } finally {
+      setBusy(false);
+      setCurrentIndex(-1);
+    }
+  };
+
+  return (
+    <ModalPortal>
+      <div className="modal-overlay" onClick={e => !busy && e.target === e.currentTarget && onClose()}>
+        <div className="modal" style={{maxWidth: 760}}>
+          <div className="modal-header">
+            <div className="modal-title">批量上架集换社</div>
+            <button className="modal-close" onClick={onClose} disabled={busy}>×</button>
+          </div>
+          <div className="modal-body">
+            <div className="modal-section-title">上架队列</div>
+            <div className="listing-copy-grid">
+              <div className="listing-field">
+                <span className="listing-label">已选商品</span>
+                <div className="listing-value">{queueItems.length}</div>
+              </div>
+              <div className="listing-field">
+                <span className="listing-label">本次执行</span>
+                <div className="listing-value">{eligibleItems.length}</div>
+              </div>
+              <div className="listing-field">
+                <span className="listing-label">已上架跳过</span>
+                <div className="listing-value">{skipListed ? queueItems.length - eligibleItems.length : 0}</div>
+              </div>
+              <div className="listing-field">
+                <span className="listing-label">不能上架</span>
+                <div className="listing-value" style={{color: blockedItems.length ? 'var(--red)' : 'var(--green)'}}>{blockedItems.length}</div>
+              </div>
+            </div>
+
+            <div className="form-group" style={{marginTop:16}}>
+              <label className={`form-check-option ${skipListed ? 'active' : ''}`}>
+                <input type="checkbox" checked={skipListed} onChange={e => setSkipListed(e.target.checked)} disabled={busy} />
+                <span>跳过已有“已上架”标签的商品</span>
+              </label>
+            </div>
+            <div className="form-group">
+              <label className={`form-check-option ${confirmAdd ? 'active' : ''}`}>
+                <input type="checkbox" checked={confirmAdd} onChange={e => setConfirmAdd(e.target.checked)} disabled={busy} />
+                <span>自动点击“添加”完成上架</span>
+              </label>
+              <div style={{fontSize:11,color:'var(--text-3)',marginTop:6}}>
+                关闭时会在第一张卡的添加页停住，批量队列不会继续到下一张。
+              </div>
+            </div>
+
+            {blockedItems.length > 0 && (
+              <div style={{marginTop:12, padding:'12px 14px', borderRadius:10, background:'var(--red-bg)', border:'1px solid var(--red-border)', color:'var(--red)', fontSize:12, lineHeight:1.7}}>
+                {blockedItems.slice(0, 5).map(item => <div key={item.id}>#{item.id} {item.name} 缺少集换社编号或有效上架价格</div>)}
+                {blockedItems.length > 5 && <div>还有 {blockedItems.length - 5} 个商品需要先补资料</div>}
+              </div>
+            )}
+
+            <div className="modal-section-title" style={{marginTop:18}}>执行状态</div>
+            <div style={{display:'grid', gap:8, maxHeight:260, overflow:'auto'}}>
+              {eligibleItems.length === 0 ? (
+                <div style={{color:'var(--text-3)',fontSize:13}}>没有可执行的商品。</div>
+              ) : eligibleItems.map((item, index) => {
+                const draft = buildJhsListingDraft(item);
+                const result = results.find(entry => entry.id === item.id);
+                const isCurrent = busy && index === currentIndex;
+                const rowPrice = priceById[item.id] ?? '';
+                const parsedPrice = normalizeOptionalPrice(rowPrice);
+                const hasInvalidPrice = (parsedPrice ?? 0) <= 0;
+                return (
+                  <div key={item.id} style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) 130px auto',gap:10,alignItems:'center',padding:'10px 12px',border:`1px solid ${hasInvalidPrice ? 'var(--red-border)' : 'var(--border)'}`,borderRadius:10,background:isCurrent ? 'rgba(62,207,142,0.08)' : '#0f0f0f'}}>
+                    <div style={{minWidth:0}}>
+                      <div style={{fontWeight:800,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>#{item.id} {item.name}</div>
+                      <div style={{fontSize:11,color:'var(--text-3)',marginTop:3}}>
+                        {draft.cardCode || '无编号'} · {draft.language || '未标识'} · 数量 {draft.qty}
+                      </div>
+                      {result && !result.ok && <div style={{fontSize:11,color:'var(--red)',marginTop:4}}>{result.error}</div>}
+                    </div>
+                    <div>
+                      <input
+                        className="form-input"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={rowPrice}
+                        onChange={e => updateItemPrice(item.id, e.target.value)}
+                        disabled={busy}
+                        title="单独设置这张卡的上架价格"
+                        style={{height:38,padding:'0 10px',textAlign:'right',fontWeight:800,color:hasInvalidPrice ? 'var(--red)' : 'var(--text)'}}
+                      />
+                      <div style={{fontSize:10,color:hasInvalidPrice ? 'var(--red)' : 'var(--text-3)',marginTop:4,textAlign:'right'}}>
+                        {hasInvalidPrice ? '价格无效' : '上架价'}
+                      </div>
+                    </div>
+                    <div style={{fontSize:12,fontWeight:800,color: result ? (result.ok ? 'var(--green)' : 'var(--red)') : (isCurrent ? 'var(--orange)' : 'var(--text-3)')}}>
+                      {result ? (result.ok ? (result.status === 'listed' ? '已上架' : '待手动') : '失败') : (isCurrent ? '上架中' : '等待')}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={onClose} disabled={busy}>关闭</button>
+            <button className="btn btn-primary" onClick={runBulkListing} disabled={!canStart}>{busy ? '批量上架中...' : `开始批量上架 ${eligibleItems.length}`}</button>
           </div>
         </div>
       </div>
@@ -4564,6 +5217,8 @@ function App({ onLock }) {
   const [sortField, setSortField] = useState('id');
   const [sortDir, setSortDir] = useState('desc');
   const [editingItem, setEditingItem] = useState(null);
+  const [listingItem, setListingItem] = useState(null);
+  const [bulkListingOpen, setBulkListingOpen] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [showScreenshotImport, setShowScreenshotImport] = useState(false);
   const [batchImage, setBatchImage] = useState(false);
@@ -4829,6 +5484,9 @@ function App({ onLock }) {
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const pageIds = paginated.map(item => item.id);
   const isPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIdSet.has(id));
+  const selectedItems = useMemo(() => (
+    selectedIds.map(id => items.find(item => item.id === id)).filter(Boolean)
+  ), [items, selectedIds]);
 
   function handleSort(field) {
     if (sortField === field) { setSortDir(d => d === 'asc' ? 'desc' : 'asc'); }
@@ -4840,6 +5498,31 @@ function App({ onLock }) {
     setItems(prev => prev.map(i => i.id === updated.id ? updated : i));
     setEditingItem(null);
     showToast('保存成功 ✓');
+  }
+
+  function handleListingSave(updated, options = {}) {
+    setItems(prev => prev.map(i => i.id === updated.id ? updated : i));
+    setListingItem(updated);
+    if (!options.silent) showToast('上架设置已保存 ✓');
+  }
+
+  function handleListingDone(updated) {
+    setItems(prev => prev.map(i => i.id === updated.id ? updated : i));
+    setListingItem(null);
+    showToast('上架完成 ✓');
+  }
+
+  function handleBulkListingDone(updated) {
+    setItems(prev => prev.map(i => i.id === updated.id ? updated : i));
+  }
+
+  function clearListedTag(id) {
+    setItems(prev => prev.map(i => i.id === id ? {
+      ...i,
+      jhsListed: false,
+      jhsListedAt: ''
+    } : i));
+    showToast('已取消上架标签');
   }
 
   function handleAdd(newItem) {
@@ -4919,13 +5602,13 @@ function App({ onLock }) {
   }
 
   function exportCSV() {
-    const headers = ['ID', '名称', '是否PSA10', '语言版本', '集换社搜索编号', '集换社游戏语言', '流通品价', 'PSA10价', '价格更新时间', '价格备注', '单价', '数量', '已售数量', '剩余数量', '成本', '已售总收入', '利润', '状态', '来源'];
+    const headers = ['ID', '名称', '是否PSA10', '是否已上架', '上架时间', '语言版本', '集换社搜索编号', '集换社游戏语言', '流通品价', 'PSA10价', '价格更新时间', '价格备注', '单价', '数量', '已售数量', '剩余数量', '成本', '已售总收入', '利润', '状态', '来源'];
     const sortedForExport = [...items].sort((a, b) => a.id - b.id);
     const exportRows = sortedForExport.map(i => {
       const totalSellQty = getItemSoldQty(i);
       const totalSellVal = getItemSoldValue(i);
       const remaining = getItemRemainingQty(i);
-      return [i.id, i.name, i.isPsa10 ? '是' : '', i.cardLanguage || i.jhsGameLabel || '', i.jhsSearchCode || '', i.jhsGameLabel || '', i.jhsRawPrice ?? '', i.jhsPsa10Price ?? '', i.jhsPriceUpdatedAt || '', i.jhsPriceNote || '', i.unitPrice ?? '', i.qty ?? '', totalSellQty, remaining, i.cost ?? '', totalSellVal || '', getItemSaleProfit(i) ?? '', getItemInventoryStatus(i), i.source];
+      return [i.id, i.name, i.isPsa10 ? '是' : '', i.jhsListed ? '是' : '', i.jhsListedAt || '', i.cardLanguage || i.jhsGameLabel || '', i.jhsSearchCode || '', i.jhsGameLabel || '', i.jhsRawPrice ?? '', i.jhsPsa10Price ?? '', i.jhsPriceUpdatedAt || '', i.jhsPriceNote || '', i.unitPrice ?? '', i.qty ?? '', totalSellQty, remaining, i.cost ?? '', totalSellVal || '', getItemSaleProfit(i) ?? '', getItemInventoryStatus(i), i.source];
     });
     const csv = [headers, ...exportRows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -5172,6 +5855,7 @@ function App({ onLock }) {
           <button className="btn btn-secondary" onClick={() => handleBulkLanguageUpdate('filtered')}>应用当前筛选 {filtered.length}</button>
           {selectedIds.length > 0 && <button className="btn btn-secondary" onClick={() => setSelectedIds([])}>清空选择</button>}
           <button className="btn btn-secondary" onClick={handleBulkMarkSigned}>批量设为待签收</button>
+          <button className="btn btn-green-soft" onClick={() => setBulkListingOpen(true)} disabled={selectedIds.length === 0}>批量上架已选 {selectedIds.length || ''}</button>
         </div>
       </div>
 
@@ -5210,7 +5894,7 @@ function App({ onLock }) {
                 <th onClick={() => handleSort('soldValue')} className={sortField === 'soldValue' ? 'sorted' : ''} style={{textAlign:'right', fontSize: 11}}>已售 <SortIcon field="soldValue"/></th>
                 <th onClick={() => handleSort('profit')} className={sortField === 'profit' ? 'sorted' : ''} style={{textAlign:'right'}}>利润 <SortIcon field="profit"/></th>
                 <th onClick={() => handleSort('status')} className={sortField === 'status' ? 'sorted' : ''} style={{width:100}}>状态 <SortIcon field="status"/></th>
-                <th className="action-col" style={{width: 132}}>操作</th>
+                <th className="action-col" style={{width: 188}}>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -5239,6 +5923,20 @@ function App({ onLock }) {
                     <span className="card-name-line">
                       <span>{item.name}</span>
                       {item.isPsa10 && <span className="psa10-badge">PSA10</span>}
+                      {item.jhsListed && (
+                        <span className="listed-badge" title={item.jhsListedAt ? `上架时间：${formatDateTime(item.jhsListedAt)}` : '已上架'}>
+                          已上架
+                          <button
+                            type="button"
+                            className="listed-badge-remove"
+                            title="取消已上架标签"
+                            onClick={e => {
+                              e.stopPropagation();
+                              clearListedTag(item.id);
+                            }}
+                          >×</button>
+                        </span>
+                      )}
                     </span>
                   </td>
                   <td style={{textAlign:'center'}}>
@@ -5294,6 +5992,7 @@ function App({ onLock }) {
                   <td><span className={statusBadgeClass(item)}>{statusBadgeText(item)}</span></td>
                   <td className="action-col">
                     <div className="row-actions">
+                      <button className="action-btn action-btn-listing" onClick={() => setListingItem(item)}>上架</button>
                       <button className="action-btn" onClick={() => setEditingItem(item)}>编辑</button>
                       <button className="action-btn" style={{color:'var(--red)', borderColor:'var(--red-border)', background:'var(--red-bg)'}} onClick={() => handleDelete(item.id)}>删除</button>
                     </div>
@@ -5341,6 +6040,8 @@ function App({ onLock }) {
 
       {/* Modal */}
       {editingItem && <EditModal item={editingItem} onSave={handleSave} onClose={() => setEditingItem(null)} onToast={setToast} />}
+      {listingItem && <JhsListingModal item={listingItem} onSave={handleListingSave} onListed={handleListingDone} onClose={() => setListingItem(null)} onToast={setToast} />}
+      {bulkListingOpen && <BulkJhsListingModal items={selectedItems} onListed={handleBulkListingDone} onClose={() => setBulkListingOpen(false)} onToast={setToast} />}
       {showCloudConfig && (
         <CloudConfigModal
           config={cloudForm}

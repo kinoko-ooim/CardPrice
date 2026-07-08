@@ -49,6 +49,10 @@ class AXCGSize(ctypes.Structure):
     _fields_ = [("width", ctypes.c_double), ("height", ctypes.c_double)]
 
 
+class CGPoint(ctypes.Structure):
+    _fields_ = [("x", ctypes.c_double), ("y", ctypes.c_double)]
+
+
 APP_SERVICES = ctypes.CDLL("/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices")
 CORE_FOUNDATION = ctypes.CDLL("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
 APP_SERVICES.AXUIElementCreateApplication.restype = ctypes.c_void_p
@@ -77,6 +81,9 @@ APP_SERVICES.CGEventKeyboardSetUnicodeString.argtypes = [
     ctypes.c_long,
     ctypes.POINTER(ctypes.c_uint16),
 ]
+APP_SERVICES.CGEventCreateMouseEvent.restype = ctypes.c_void_p
+APP_SERVICES.CGEventCreateMouseEvent.argtypes = [ctypes.c_void_p, ctypes.c_uint32, CGPoint, ctypes.c_uint32]
+APP_SERVICES.CGEventPost.argtypes = [ctypes.c_uint32, ctypes.c_void_p]
 APP_SERVICES.CGEventPostToPid.argtypes = [ctypes.c_int, ctypes.c_void_p]
 CORE_FOUNDATION.CFStringCreateWithCString.restype = ctypes.c_void_p
 CORE_FOUNDATION.CFStringCreateWithCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int]
@@ -99,6 +106,10 @@ K_VK_ESCAPE = 53
 K_VK_RETURN = 36
 K_VK_NUMPAD_ENTER = 76
 K_VK_DELETE = 51
+CORE_GRAPHICS_EVENT_TAP = 0
+LEFT_MOUSE_DOWN = 1
+LEFT_MOUSE_UP = 2
+LEFT_BUTTON = 0
 
 RAW_LABELS = ("流通品相", "流通品", "集换价", "裸卡")
 PSA10_LABELS = ("PSA10", "PSA 10", "PSA-10")
@@ -653,7 +664,7 @@ def find_jhs_ax_element(match, attempts: int = 1, pause: float = 0.35) -> dict[s
 
 def find_jhs_search_field(attempts: int = 2) -> dict[str, Any] | None:
     return find_jhs_ax_element(
-        lambda node: node["identifier"] == "navSearchTextield" or node["role"] == "AXTextField",
+        lambda node: node["identifier"] == "navSearchTextield",
         attempts=attempts,
         pause=0.6,
     )
@@ -669,6 +680,8 @@ def focus_jhs_search_field() -> bool:
 
 
 def is_home_search_entry(node: dict[str, Any]) -> bool:
+    if "同音字/拼音/首字母/编号" in node["text"]:
+        return True
     if node["role"] != "AXButton" or node["description"]:
         return False
     size = ax_size_attribute(node["element"])
@@ -748,6 +761,21 @@ def press_escape(times: int = 1) -> None:
         time.sleep(0.35)
 
 
+def click_jhs_window_ratio(rx: float, ry: float) -> None:
+    x, y, w, h = jhs_window_rect()
+    point = CGPoint(float(x + w * rx), float(y + h * ry))
+    down = APP_SERVICES.CGEventCreateMouseEvent(None, LEFT_MOUSE_DOWN, point, LEFT_BUTTON)
+    up = APP_SERVICES.CGEventCreateMouseEvent(None, LEFT_MOUSE_UP, point, LEFT_BUTTON)
+    try:
+        APP_SERVICES.CGEventPost(CORE_GRAPHICS_EVENT_TAP, down)
+        time.sleep(0.05)
+        APP_SERVICES.CGEventPost(CORE_GRAPHICS_EVENT_TAP, up)
+    finally:
+        cf_release(down)
+        cf_release(up)
+    time.sleep(0.8)
+
+
 def dismiss_delete_history_alert() -> bool:
     has_alert = find_jhs_ax_element(
         lambda node: "是否删除搜索历史记录" in node["text"] or node["description"] == "警告",
@@ -818,17 +846,18 @@ def current_game_filter_label() -> str:
     return node["description"] if node else ""
 
 
-def ensure_game_filter(hint: dict[str, Any], forced_label: str = "") -> None:
+def ensure_game_filter(hint: dict[str, Any], forced_label: str = "") -> bool:
     target = target_game_filter_label(hint, forced_label)
     if not target or current_game_filter_label() == target:
-        return
+        return True
     if not ax_press_first(lambda node: node["identifier"] == "filterViewGameButton", attempts=2, pause=0.6):
-        raise RuntimeError("未找到游戏筛选按钮")
+        return False
     if not ax_press_first(lambda node: node["description"] == target, attempts=2, pause=0.6):
         raise RuntimeError(f"未找到游戏筛选项: {target}")
     if not ax_press_first(lambda node: node["description"] == "确认", attempts=2, pause=1.2):
         raise RuntimeError("游戏筛选确认失败")
     time.sleep(2.0)
+    return True
 
 
 def press_first_product_result(card_code: str) -> None:
@@ -940,37 +969,78 @@ def normalized_ocr_text(text: str) -> str:
     return re.sub(r"\s+", "", text).upper().replace("—", "-").replace("–", "-")
 
 
-def open_search_page() -> None:
+def leave_add_product_page() -> None:
+    for _ in range(4):
+        current_text = read_jhs_accessibility_text(timeout=2)
+        if "添加商品" not in current_text:
+            return
+        pressed = ax_press_first(lambda node: node["identifier"] == "nav_back", attempts=1, pause=0.9)
+        if not pressed:
+            press_escape(1)
+        time.sleep(0.8)
+        dismiss_delete_history_alert()
+
+
+def try_open_search_page_once() -> bool:
     dismiss_delete_history_alert()
+    leave_add_product_page()
     if focus_jhs_search_field():
-        return
+        return True
     # First get out of transient image viewers/detail pages.
     press_escape(2)
     dismiss_delete_history_alert()
     if focus_jhs_search_field():
-        return
+        return True
     # If a detail page is open, use the accessibility back button. The iOS-on-Mac
     # wrapper can ignore synthetic coordinate clicks, but AXPress is reliable and
     # does not move the user's real mouse cursor.
-    for _ in range(4):
+    for _ in range(8):
         if focus_jhs_search_field():
-            return
-        if not ax_press_first(lambda node: node["identifier"] == "nav_back", attempts=1, pause=0.8):
+            return True
+        if not ax_press_first(lambda node: node["identifier"] == "nav_back", attempts=2, pause=0.9):
             break
+        dismiss_delete_history_alert()
     if focus_jhs_search_field():
-        return
+        return True
     if ax_press_first(is_home_search_entry, attempts=2, pause=0.8):
         if focus_jhs_search_field():
-            return
+            return True
+    current_text = read_jhs_accessibility_text(timeout=2)
+    if "个人主页" in current_text or "我是卖家" in current_text or "商品管理" in current_text:
+        click_jhs_window_ratio(0.12, 0.965)
+        time.sleep(1.2)
+        if focus_jhs_search_field():
+            return True
+        if ax_press_first(is_home_search_entry, attempts=2, pause=0.8):
+            if focus_jhs_search_field():
+                return True
+    return False
+
+
+def open_search_page() -> None:
+    if try_open_search_page_once():
+        return
+    restart_jhs_app()
+    if try_open_search_page_once():
+        return
     raise RuntimeError("未找到集换社搜索框或首页搜索入口")
 
 
 def open_card_detail_from_ui(card_code: str, game_label: str = "") -> bool:
     ensure_jhs_app_open()
     hint = fetch_match_count_hint(card_code)
-    open_search_page()
-    set_search_text_and_return(card_code)
-    ensure_game_filter(hint, game_label)
+    forced_label = target_game_filter_label(hint, game_label)
+    for attempt in range(2):
+        open_search_page()
+        set_search_text_and_return(card_code)
+        if ensure_game_filter(hint, game_label):
+            break
+        if not forced_label:
+            break
+        if attempt == 0:
+            press_escape(2)
+            continue
+        raise RuntimeError("未找到游戏筛选按钮，已重新搜索仍失败")
     # Keep the result tab on 商品 before opening the first card result.
     # The 商品 tab is near the top, while the first商品 result row starts much
     # lower; keep these coordinates separated so we do not fall into 动态.
@@ -1257,8 +1327,10 @@ def supabase_headers(anon_key: str) -> dict[str, str]:
 
 def read_supabase_items(url: str, anon_key: str, table: str, row_id: str) -> list[dict[str, Any]]:
     endpoint = f"{url.rstrip('/')}/rest/v1/{table}?id=eq.{row_id}&select=payload"
-    req = urllib.request.Request(endpoint, headers=supabase_headers(anon_key))
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    with urlopen_with_retries(
+        lambda: urllib.request.Request(endpoint, headers=supabase_headers(anon_key)),
+        timeout=30,
+    ) as resp:
         rows = json.loads(resp.read().decode("utf-8"))
     if not rows:
         return []
