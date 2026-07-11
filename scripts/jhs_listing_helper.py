@@ -106,60 +106,29 @@ def ax_position_attribute(element: int) -> tuple[float, float] | None:
         jhs.cf_release(ref)
 
 
-def add_product_text_fields() -> list[dict[str, Any]]:
+def add_product_form_snapshot(
+    labels: tuple[str, ...] = (),
+) -> tuple[list[dict[str, Any]], dict[str, list[tuple[float, float]]]]:
     fields: list[dict[str, Any]] = []
+    label_positions = {label: [] for label in labels}
     for node in jhs.iter_jhs_ax_elements(max_nodes=2600, max_seconds=4):
-        if node.get("role") != "AXTextField":
+        role = node.get("role")
+        text = str(node.get("description") or node.get("value") or "").strip()
+        matched_labels = [label for label in labels if label in text]
+        if role != "AXTextField" and not matched_labels:
             continue
         size = jhs.ax_size_attribute(node["element"])
         position = ax_position_attribute(node["element"])
         if not size or not position:
             continue
-        fields.append({**node, "size": size, "position": position})
-    return sorted(fields, key=lambda item: (item["position"][1], item["position"][0]))
-
-
-def set_text_field_value(field: dict[str, Any], text: str) -> bool:
-    element = field["element"]
-    try:
-        jhs.ax_press_element(element)
-        time.sleep(0.15)
-        jhs.ax_set_bool_attribute(element, "AXFocused", True)
-        jhs.ax_set_string_attribute(element, "AXValue", "")
-        time.sleep(0.08)
-        jhs.post_key_to_jhs(K_VK_DELETE)
-        time.sleep(0.08)
-        jhs.post_text_to_jhs(text)
-        time.sleep(0.2)
-        jhs.ax_set_string_attribute(element, "AXValue", text)
-        time.sleep(0.2)
-        return True
-    except Exception:
-        return False
-
-
-def find_price_field() -> dict[str, Any] | None:
-    candidates = []
-    for field in add_product_text_fields():
-        width, height = field["size"]
-        value = str(field.get("value") or "").strip()
-        if value:
-            continue
-        if 35 <= width <= 180 and 15 <= height <= 45:
-            candidates.append(field)
-    return candidates[0] if candidates else None
-
-
-def find_note_field() -> dict[str, Any] | None:
-    candidates = []
-    for field in add_product_text_fields():
-        width, height = field["size"]
-        value = str(field.get("value") or "").strip()
-        if value:
-            continue
-        if width >= 260 and 15 <= height <= 60:
-            candidates.append(field)
-    return candidates[0] if candidates else None
+        if role == "AXTextField":
+            fields.append({**node, "size": size, "position": position})
+        for label in matched_labels:
+            x, y = position
+            width, height = size
+            label_positions[label].append((x + width / 2, y + height / 2))
+    fields.sort(key=lambda item: (item["position"][1], item["position"][0]))
+    return fields, label_positions
 
 
 def field_center(field: dict[str, Any]) -> tuple[float, float]:
@@ -168,26 +137,100 @@ def field_center(field: dict[str, Any]) -> tuple[float, float]:
     return x + width / 2, y + height / 2
 
 
-def find_label_position(label: str) -> tuple[float, float] | None:
-    for node in jhs.iter_jhs_ax_elements(max_nodes=2600, max_seconds=4):
-        text = node.get("description") or node.get("value") or node.get("text") or ""
-        if label not in text:
+def read_text_field_value(field: dict[str, Any]) -> str:
+    try:
+        return jhs.ax_text_attribute(field["element"], "AXValue").strip()
+    except Exception:
+        return ""
+
+
+def set_text_field_value(field: dict[str, Any], text: str) -> bool:
+    element = field["element"]
+    for click_field in (False, True):
+        try:
+            if click_field:
+                center_x, center_y = field_center(field)
+                click_at(round(center_x), round(center_y))
+            else:
+                jhs.ax_press_element(element)
+                time.sleep(0.15)
+            jhs.ax_set_bool_attribute(element, "AXFocused", True)
+            jhs.ax_set_string_attribute(element, "AXValue", "")
+            time.sleep(0.08)
+            jhs.post_key_to_jhs(K_VK_DELETE)
+            time.sleep(0.08)
+            if text:
+                jhs.post_text_to_jhs(text)
+            time.sleep(0.2)
+            jhs.ax_set_string_attribute(element, "AXValue", text)
+            time.sleep(0.2)
+            if read_text_field_value(field) == text:
+                return True
+        except Exception:
             continue
-        position = ax_position_attribute(node["element"])
-        size = jhs.ax_size_attribute(node["element"])
-        if not position or not size:
-            continue
-        x, y = position
-        width, height = size
-        return x + width / 2, y + height / 2
+    return False
+
+
+def find_price_field(attempts: int = 1, pause: float = 0.4) -> dict[str, Any] | None:
+    for attempt in range(attempts):
+        fields, labels = add_product_form_snapshot(("商品价格",))
+        candidates: list[tuple[float, dict[str, Any]]] = []
+        fallback: list[dict[str, Any]] = []
+        for field in fields:
+            width, height = field["size"]
+            value = str(field.get("value") or "").strip()
+            if value and not re.fullmatch(r"\d+(?:\.\d{0,2})?", value):
+                continue
+            if not (35 <= width <= 180 and 15 <= height <= 45):
+                continue
+            fallback.append(field)
+            center_x, center_y = field_center(field)
+            for label_x, label_y in labels["商品价格"]:
+                delta_x = center_x - label_x
+                delta_y = abs(center_y - label_y)
+                if 5 <= delta_x <= 220 and delta_y <= 36:
+                    candidates.append((delta_y * 10 + abs(delta_x - 60), field))
+        if candidates:
+            return min(candidates, key=lambda item: item[0])[1]
+        if len(fallback) == 1:
+            return fallback[0]
+        if attempt + 1 < attempts:
+            time.sleep(pause)
     return None
 
 
+def find_note_field(attempts: int = 1, pause: float = 0.4) -> dict[str, Any] | None:
+    for attempt in range(attempts):
+        fields, labels = add_product_form_snapshot(("商品备注",))
+        candidates: list[tuple[float, dict[str, Any]]] = []
+        fallback: list[dict[str, Any]] = []
+        for field in fields:
+            width, height = field["size"]
+            if not (width >= 260 and 15 <= height <= 60):
+                continue
+            fallback.append(field)
+            center_x, center_y = field_center(field)
+            for label_x, label_y in labels["商品备注"]:
+                delta_y = center_y - label_y
+                if abs(center_x - label_x) <= 300 and 8 <= delta_y <= 80:
+                    candidates.append((abs(delta_y - 34) + abs(center_x - label_x) / 20, field))
+        if candidates:
+            return min(candidates, key=lambda item: item[0])[1]
+        if len(fallback) == 1:
+            return fallback[0]
+        if attempt + 1 < attempts:
+            time.sleep(pause)
+    return None
+
+
+def find_label_position(label: str) -> tuple[float, float] | None:
+    _, labels = add_product_form_snapshot((label,))
+    return labels[label][0] if labels[label] else None
+
+
 def find_qty_field() -> dict[str, Any] | None:
-    fields = add_product_text_fields()
-    label_center = find_label_position("库存数量")
-    if label_center:
-        _, label_y = label_center
+    fields, labels = add_product_form_snapshot(("库存数量",))
+    if labels["库存数量"]:
         candidates = []
         for field in fields:
             width, height = field["size"]
@@ -195,18 +238,21 @@ def find_qty_field() -> dict[str, Any] | None:
             value = str(field.get("value") or "").strip()
             if not value.isdigit():
                 continue
-            if 12 <= width <= 90 and 8 <= height <= 36 and abs(center_y - label_y) <= 32:
-                candidates.append((abs(center_y - label_y), center_x, field))
+            for label_x, label_y in labels["库存数量"]:
+                delta_x = center_x - label_x
+                delta_y = abs(center_y - label_y)
+                if 5 <= delta_x <= 150 and 12 <= width <= 90 and 8 <= height <= 36 and delta_y <= 32:
+                    candidates.append((delta_y * 10 + abs(delta_x - 60), field))
         if candidates:
-            return sorted(candidates, key=lambda item: (item[0], item[1]))[0][2]
+            return min(candidates, key=lambda item: item[0])[1]
 
     compact_candidates = []
     for field in fields:
         width, height = field["size"]
         value = str(field.get("value") or "").strip()
-        if value.isdigit() and 12 <= width <= 70 and 8 <= height <= 32:
+        if value.isdigit() and 12 <= width <= 45 and 8 <= height <= 32:
             compact_candidates.append(field)
-    return compact_candidates[0] if compact_candidates else None
+    return compact_candidates[0] if len(compact_candidates) == 1 else None
 
 
 def read_qty_field_value() -> int | None:
@@ -242,53 +288,39 @@ def fill_qty_field(qty: int) -> None:
     raise RuntimeError(f"库存数量没有调整到 {qty}，已停止，避免数量错误上架")
 
 
-def text_contains_price(text: str, price_text: str) -> bool:
-    compact_text = re.sub(r"\s+", "", text)
-    compact_price = price_text.rstrip("0").rstrip(".")
-    return price_text in compact_text or compact_price in compact_text
+def numeric_text_matches(value: str, expected: str) -> bool:
+    try:
+        return abs(float(value.strip()) - float(expected)) < 0.000001
+    except (TypeError, ValueError):
+        return False
 
 
 def fill_price_field(price: float) -> None:
     price_text = f"{price:.2f}".rstrip("0").rstrip(".")
-    field = find_price_field()
-    if field and set_text_field_value(field, price_text):
-        refreshed = visible_text(timeout=2)
-        if text_contains_price(refreshed, price_text):
+    for attempt in range(3):
+        field = find_price_field(attempts=2)
+        if field and set_text_field_value(field, price_text):
+            if numeric_text_matches(read_text_field_value(field), price_text):
+                return
+        refreshed_field = find_price_field()
+        if refreshed_field and numeric_text_matches(read_text_field_value(refreshed_field), price_text):
             return
-
-    # Fallback coordinates target the center of the price input from the current
-    # Jihuanshe add-product layout. Try twice because the first click can only
-    # focus the iOS text field.
-    for rx, ry in ((0.16, 0.515), (0.18, 0.515)):
-        click_ratio(rx, ry)
-        replace_focused_text(price_text)
-        refreshed = visible_text(timeout=2)
-        if text_contains_price(refreshed, price_text):
-            return
-    raise RuntimeError("商品价格没有填入成功，已停止，避免按集换价或空价格误上架")
+        if attempt < 2:
+            time.sleep(0.4)
+    raise RuntimeError("没有定位并写入商品价格输入框，已停止；不会点击已有上架商品或用空价格继续")
 
 
 def fill_note_field(note: str) -> bool:
-    field = find_note_field()
+    field = find_note_field(attempts=2)
     if field and set_text_field_value(field, note):
         return True
-    click_ratio(0.50, 0.69)
-    replace_focused_text(note)
-    return True
+    raise RuntimeError("没有定位并写入商品备注输入框，已停止；不会使用固定坐标继续点击")
 
 
 def paste_text(text: str) -> None:
     subprocess.run(["pbcopy"], input=text, text=True, check=False)
     jhs.run_osascript('tell application "System Events" to keystroke "v" using command down', timeout=5)
     time.sleep(0.25)
-
-
-def replace_focused_text(text: str) -> None:
-    jhs.run_osascript('tell application "System Events" to keystroke "a" using command down', timeout=5)
-    time.sleep(0.08)
-    jhs.post_key_to_jhs(K_VK_DELETE)
-    time.sleep(0.08)
-    paste_text(text)
 
 
 def visible_text(timeout: float = 3) -> str:
@@ -337,6 +369,53 @@ def press_button_text(*labels: str, attempts: int = 3, pause: float = 0.6) -> bo
         return node.get("role") == "AXButton" and any(label in text for label in label_set)
 
     return jhs.ax_press_first(match, attempts=attempts, pause=pause)
+
+
+def click_form_option(row_label: str, *option_labels: str, attempts: int = 3) -> None:
+    wanted = {label for label in option_labels if label}
+    if not wanted:
+        raise RuntimeError(f"{row_label}没有可选目标")
+
+    for attempt in range(attempts):
+        row_positions: list[tuple[float, float]] = []
+        options: list[tuple[dict[str, Any], tuple[float, float]]] = []
+        for node in jhs.iter_jhs_ax_elements(max_nodes=2600, max_seconds=4):
+            text = str(node.get("description") or node.get("value") or "").strip()
+            if text != row_label and text not in wanted:
+                continue
+            position = ax_position_attribute(node["element"])
+            size = jhs.ax_size_attribute(node["element"])
+            if not position or not size:
+                continue
+            x, y = position
+            width, height = size
+            center = (x + width / 2, y + height / 2)
+            if text == row_label:
+                row_positions.append(center)
+            elif node.get("role") in {"AXButton", "AXStaticText"}:
+                options.append((node, center))
+
+        candidates: list[tuple[float, dict[str, Any], tuple[float, float]]] = []
+        for node, center in options:
+            center_x, center_y = center
+            for label_x, label_y in row_positions:
+                delta_x = center_x - label_x
+                delta_y = abs(center_y - label_y)
+                if 5 <= delta_x <= 260 and delta_y <= 28:
+                    candidates.append((delta_y * 10 + delta_x, node, center))
+        if candidates:
+            _, node, center = min(candidates, key=lambda item: item[0])
+            if node.get("role") == "AXButton" and jhs.ax_press_element(node["element"]):
+                time.sleep(0.5)
+                return
+            click_at(round(center[0]), round(center[1]))
+            time.sleep(0.5)
+            return
+        if attempt + 1 < attempts:
+            time.sleep(0.5)
+
+    choices = " / ".join(option_labels)
+    raise RuntimeError(f"没有在“{row_label}”一行找到“{choices}”，已停止，避免误点已有上架商品")
 
 
 def front_window_summary() -> str:
@@ -474,17 +553,13 @@ def upload_image_if_possible(image_url: str, required: bool = False) -> str:
 def select_listing_category(is_psa10: bool) -> None:
     wait_until_text(r"添加商品|类别及品相|商品价格", timeout=10)
     if is_psa10:
-        if not press_button_text("评级卡", attempts=2):
-            click_ratio(0.34, 0.33)
-        time.sleep(0.5)
-        if not press_button_text("PSA", "PSA10", attempts=2):
-            click_ratio(0.22, 0.38)
+        click_form_option("商品类别", "评级卡")
+        wait_until_text(r"评级公司", timeout=5)
+        click_form_option("评级公司", "PSA", "PSA10")
     else:
-        if not press_button_text("非评级卡", attempts=2):
-            click_ratio(0.22, 0.33)
-        time.sleep(0.5)
-        if not press_button_text("流通品相", attempts=2):
-            click_ratio(0.22, 0.38)
+        click_form_option("商品类别", "非评级卡")
+        wait_until_text(r"卡牌品相", timeout=5)
+        click_form_option("卡牌品相", "流通品相")
 
 
 def fill_listing_form(payload: dict[str, Any]) -> dict[str, Any]:
