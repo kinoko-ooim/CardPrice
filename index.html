@@ -1212,6 +1212,12 @@ function getJhsListingPrice(item) {
   }
   return basePrice;
 }
+function jhsListingRequiresImage(price) {
+  return (normalizeOptionalPrice(price) ?? 0) > 500;
+}
+function hasJhsListingImage(item) {
+  return !!String(item?.imageUrl || '').trim();
+}
 function buildJhsListingDraft(item) {
   const remainingQty = Math.max(1, getItemRemainingQty(item) || item?.qty || 1);
   const listingPrice = getJhsListingPrice(item);
@@ -2974,6 +2980,12 @@ function JhsListingModal({ item, onSave, onListed, onClose, onToast }) {
   const startListing = async () => {
     const savedItem = handleSave({silent: true});
     if (!savedItem) return;
+    if (jhsListingRequiresImage(previewDraft.price) && !hasJhsListingImage(savedItem)) {
+      const message = '定价超过 500 元需要上传商品图，请先在商品编辑里添加图片';
+      setListingResult({ok:false, error:message});
+      onToast?.(message);
+      return;
+    }
     setListingBusy(true);
     setListingResult(null);
     try {
@@ -3183,7 +3195,10 @@ function BulkJhsListingModal({ items, onListed, onClose, onToast }) {
     queueItems.filter(item => !skipListed || !item.jhsListed)
   ), [queueItems, skipListed]);
   const blockedItems = useMemo(() => (
-    eligibleItems.filter(item => !buildJhsListingDraft(item).cardCode || (normalizeOptionalPrice(priceById[item.id]) ?? 0) <= 0)
+    eligibleItems.filter(item => {
+      const price = normalizeOptionalPrice(priceById[item.id]) ?? 0;
+      return !buildJhsListingDraft(item).cardCode || price <= 0 || (jhsListingRequiresImage(price) && !hasJhsListingImage(item));
+    })
   ), [eligibleItems, priceById]);
   const canStart = eligibleItems.length > 0 && blockedItems.length === 0 && !busy;
   const needsAccessibilityPermission = bulkError.includes('辅助功能权限') || bulkError.includes('辅助功能');
@@ -3350,7 +3365,15 @@ function BulkJhsListingModal({ items, onListed, onClose, onToast }) {
 
             {blockedItems.length > 0 && (
               <div style={{marginTop:12, padding:'12px 14px', borderRadius:10, background:'var(--red-bg)', border:'1px solid var(--red-border)', color:'var(--red)', fontSize:12, lineHeight:1.7}}>
-                {blockedItems.slice(0, 5).map(item => <div key={item.id}>#{item.id} {item.name} 缺少集换社编号或有效上架价格</div>)}
+                {blockedItems.slice(0, 5).map(item => {
+                  const price = normalizeOptionalPrice(priceById[item.id]) ?? 0;
+                  const reason = !buildJhsListingDraft(item).cardCode
+                    ? '缺少集换社编号'
+                    : price <= 0
+                      ? '缺少有效上架价格'
+                      : '定价超过 500 元，需要先添加商品图';
+                  return <div key={item.id}>#{item.id} {item.name} {reason}</div>;
+                })}
                 {blockedItems.length > 5 && <div>还有 {blockedItems.length - 5} 个商品需要先补资料</div>}
               </div>
             )}

@@ -18,6 +18,7 @@ import sys
 import tempfile
 import time
 import urllib.parse
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -319,6 +320,50 @@ def press_button_text(*labels: str, attempts: int = 3, pause: float = 0.6) -> bo
     return jhs.ax_press_first(match, attempts=attempts, pause=pause)
 
 
+def front_window_summary() -> str:
+    try:
+        return jhs.run_osascript(
+            '''
+tell application "System Events"
+  set frontProc to first process whose frontmost is true
+  set output to name of frontProc
+  repeat with frontWindow in windows of frontProc
+    set output to output & linefeed & (name of frontWindow as text) & "|" & (role of frontWindow as text) & "|" & (subrole of frontWindow as text)
+  end repeat
+  return output
+end tell
+''',
+            timeout=5,
+        )
+    except Exception:
+        return ""
+
+
+def is_file_picker_visible() -> bool:
+    summary = front_window_summary().lower()
+    return any(
+        marker in summary
+        for marker in (
+            "axdialog",
+            "open",
+            "choose",
+            "打开",
+            "选择",
+            "前往文件夹",
+            "go to the folder",
+        )
+    )
+
+
+def wait_for_file_picker(timeout: float = 2.5) -> bool:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if is_file_picker_visible():
+            return True
+        time.sleep(0.2)
+    return False
+
+
 def resolve_image_path(image_url: str) -> Path | None:
     if not image_url:
         return None
@@ -340,29 +385,71 @@ def resolve_image_path(image_url: str) -> Path | None:
     if image_url.startswith("cardimg/"):
         path = PROJECT_ROOT / image_url
         return path if path.exists() else None
+    if image_url.startswith(("http://", "https://")):
+        try:
+            suffix = Path(urllib.parse.urlparse(image_url).path).suffix.lower()
+            if suffix not in {".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic"}:
+                suffix = ".jpg"
+            path = Path(tempfile.gettempdir()) / f"kajia-listing-{int(time.time() * 1000)}{suffix}"
+            req = urllib.request.Request(image_url, headers={"User-Agent": "kajia-listing-helper/0.1"})
+            with urllib.request.urlopen(req, timeout=20) as response:
+                path.write_bytes(response.read())
+            return path if path.exists() and path.stat().st_size > 0 else None
+        except Exception:
+            return None
     path = Path(image_url)
     return path if path.exists() else None
 
 
-def upload_image_if_possible(image_url: str) -> str:
-    image_path = resolve_image_path(image_url)
-    if not image_path:
-        return "未找到可上传的本地图片，已停留在上传商品图区域"
+def upload_tile_points() -> list[tuple[int, int]]:
+    points: list[tuple[int, int]] = []
+    label_center = find_label_position("上传商品图")
+    if label_center:
+        x, y = label_center
+        points.extend([(int(x + 52), int(y + 96)), (int(x + 52), int(y + 72))])
+    points.extend(jhs_window_point(rx, ry) for rx, ry in ((0.085, 0.855), (0.12, 0.84), (0.09, 0.80)))
+    deduped: list[tuple[int, int]] = []
+    for point in points:
+        if point not in deduped:
+            deduped.append(point)
+    return deduped
 
-    # The upload tile sits in the lower-left area of the add-product form.
-    click_ratio(0.12, 0.84)
-    time.sleep(1.0)
+
+def choose_image_file(image_path: Path) -> bool:
+    if not wait_for_file_picker(timeout=1.5):
+        return False
     try:
         jhs.run_osascript('tell application "System Events" to keystroke "g" using {command down, shift down}', timeout=5)
         time.sleep(0.3)
+        if not wait_for_file_picker(timeout=1.5):
+            return False
         paste_text(str(image_path))
+        time.sleep(0.2)
         jhs.post_key_to_jhs(jhs.K_VK_RETURN)
         time.sleep(0.8)
         jhs.post_key_to_jhs(jhs.K_VK_RETURN)
-        time.sleep(1.5)
-        return f"已尝试上传图片：{image_path.name}"
-    except Exception as exc:
-        return f"图片自动上传未完成：{exc}"
+        time.sleep(2.0)
+        return not is_file_picker_visible()
+    except Exception:
+        return False
+
+
+def upload_image_if_possible(image_url: str, required: bool = False) -> str:
+    image_path = resolve_image_path(image_url)
+    if not image_path:
+        if required:
+            raise RuntimeError("定价超过 500 元需要上传商品图，但当前商品没有可用图片；请先在网页商品里添加图片")
+        return "未找到可上传的图片，已跳过商品图"
+
+    for point in upload_tile_points():
+        click_at(*point)
+        time.sleep(0.9)
+        press_button_text("从文件选择", "选择文件", "从相册选择", "照片图库", "相册", attempts=1, pause=0.5)
+        time.sleep(0.5)
+        if choose_image_file(image_path):
+            return f"已上传商品图：{image_path.name}"
+
+    raise RuntimeError("商品图没有上传成功，已停止；请确认集换社停在“上传商品图”的加号区域，或先给商品添加本地图片")
 
 
 def select_listing_category(is_psa10: bool) -> None:
@@ -422,7 +509,7 @@ def fill_listing_form(payload: dict[str, Any]) -> dict[str, Any]:
         fill_note_field(note[:120])
         steps.append("已填写备注")
 
-    image_note = upload_image_if_possible(image_url)
+    image_note = upload_image_if_possible(image_url, required=price > 500)
     steps.append(image_note)
 
     if confirm_add:
