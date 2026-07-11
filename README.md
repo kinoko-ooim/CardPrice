@@ -23,7 +23,7 @@
 ## 常用位置
 
 - 页面主入口：`index.html`
-- 图片目录：`cardimg/`
+- 图片目录：`cardimg/`，其中 `cardimg/CSV5C-155-129.png` 是 ID 145“喷火龙ex”上架用的商品图。
 - Supabase 函数说明：`supabase/functions/README.md`
 - 图片查找脚本：`scripts/card_image_lookup.py`
 - 本地页面服务：`scripts/dashboard_server.py`
