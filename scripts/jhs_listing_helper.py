@@ -509,7 +509,10 @@ def fill_listing_form(payload: dict[str, Any]) -> dict[str, Any]:
         fill_note_field(note[:120])
         steps.append("已填写备注")
 
-    image_note = upload_image_if_possible(image_url, required=price > 500)
+    if price > 500:
+        image_note = upload_image_if_possible(image_url, required=True)
+    else:
+        image_note = "价格不超过 500 元，已跳过上传商品图"
     steps.append(image_note)
 
     if confirm_add:

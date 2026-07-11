@@ -3153,7 +3153,7 @@ function JhsListingModal({ item, onSave, onListed, onClose, onToast }) {
               <div>1. 用编号和语言搜索卡片：{draft.cardCode || item.name} / {draft.language || '未标识'}</div>
               <div>2. 进入卡片详情后点击“出售”。</div>
               <div>3. 商品类别选择“{draft.listingCategory}”，{item.isPsa10 ? '评级类型选择“PSA”。' : '卡牌品相选择“流通品相”。'}</div>
-              <div>4. 填入价格 ¥{previewDraft.price.toFixed(2)}、库存 {draft.qty}、备注，并上传商品图。</div>
+              <div>4. 填入价格 ¥{previewDraft.price.toFixed(2)}、库存 {draft.qty}、备注；价格超过 ¥500 时上传商品图。</div>
               <div>5. 点击“添加”完成上架。</div>
             </div>
 
