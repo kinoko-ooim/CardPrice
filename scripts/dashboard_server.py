@@ -8,6 +8,8 @@ start the Jihuanshe listing helper when the browser needs it.
 from __future__ import annotations
 
 import json
+import os
+import shlex
 import subprocess
 import sys
 import time
@@ -44,15 +46,17 @@ def start_helper() -> dict[str, Any]:
     else:
         log_path = PROJECT_ROOT / "data" / "jhs_listing_helper.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        log_file = log_path.open("a", encoding="utf-8")
-        HELPER_PROCESS = subprocess.Popen(
-            [sys.executable, str(HELPER_SCRIPT)],
-            cwd=str(PROJECT_ROOT / "scripts"),
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            text=True,
-            start_new_session=True,
+        command_path = PROJECT_ROOT / "data" / "start_jhs_listing_helper.command"
+        command_path.write_text(
+            "#!/bin/zsh\n"
+            f"cd {shlex.quote(str(PROJECT_ROOT))} || exit 1\n"
+            f"exec {shlex.quote(sys.executable)} {shlex.quote(str(HELPER_SCRIPT))} "
+            f">> {shlex.quote(str(log_path))} 2>&1\n",
+            encoding="utf-8",
         )
+        os.chmod(command_path, 0o755)
+        subprocess.run(["open", "-a", "Terminal", str(command_path)], check=False)
+        HELPER_PROCESS = None
         status = "started"
 
     deadline = time.time() + 5
@@ -61,6 +65,14 @@ def start_helper() -> dict[str, Any]:
             return {"ok": True, "status": status}
         time.sleep(0.3)
     return {"ok": False, "status": status, "error": "本地上架服务启动超时，请查看 data/jhs_listing_helper.log"}
+
+
+def open_accessibility_settings() -> dict[str, Any]:
+    subprocess.run(
+        ["open", "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"],
+        check=False,
+    )
+    return {"ok": True, "status": "opened"}
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -99,6 +111,10 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path.startswith("/start-jhs-listing-helper"):
             result = start_helper()
             self.json_response(200 if result.get("ok") else 500, result)
+            return
+        if self.path.startswith("/open-accessibility-settings"):
+            result = open_accessibility_settings()
+            self.json_response(200, result)
             return
         self.json_response(404, {"ok": False, "error": "not found"})
 

@@ -17,6 +17,7 @@ __pycache__/
 # 临时文件
 *.tmp
 *.log
+data/start_jhs_listing_helper.command
 
 # IDE
 .vscode/

@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 import json
+import os
 import re
 import subprocess
 import sys
@@ -442,7 +443,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         if self.path.startswith("/health"):
-            json_response(self, 200, {"ok": True, "service": "jhs-listing-helper"})
+            json_response(self, 200, {
+                "ok": True,
+                "service": "jhs-listing-helper",
+                "pid": os.getpid(),
+                "executable": sys.executable,
+                "accessibilityTrusted": jhs.is_accessibility_trusted(),
+            })
             return
         json_response(self, 404, {"ok": False, "error": "not found"})
 

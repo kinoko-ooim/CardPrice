@@ -72,6 +72,10 @@ try:
     APP_SERVICES.AXUIElementSetMessagingTimeout.argtypes = [ctypes.c_void_p, ctypes.c_float]
 except AttributeError:
     pass
+try:
+    APP_SERVICES.AXIsProcessTrusted.restype = ctypes.c_bool
+except AttributeError:
+    pass
 APP_SERVICES.AXValueGetValue.restype = ctypes.c_bool
 APP_SERVICES.AXValueGetValue.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p]
 APP_SERVICES.CGEventCreateKeyboardEvent.restype = ctypes.c_void_p
@@ -541,7 +545,28 @@ def jhs_process_id() -> int:
     return int(proc.stdout.splitlines()[0].strip())
 
 
+def is_accessibility_trusted() -> bool:
+    checker = getattr(APP_SERVICES, "AXIsProcessTrusted", None)
+    if not checker:
+        return True
+    try:
+        return bool(checker())
+    except Exception:
+        return True
+
+
+def require_accessibility_trusted() -> None:
+    if is_accessibility_trusted():
+        return
+    raise RuntimeError(
+        "Python/终端还没有 macOS 辅助功能权限，无法读取集换社窗口；"
+        f"当前执行程序是 {sys.executable}；"
+        "请到 系统设置 -> 隐私与安全性 -> 辅助功能，同时允许 Terminal 和当前 Python 后重试"
+    )
+
+
 def post_key_to_jhs(key_code: int, repeats: int = 1) -> None:
+    require_accessibility_trusted()
     pid = jhs_process_id()
     for _ in range(repeats):
         down = APP_SERVICES.CGEventCreateKeyboardEvent(None, key_code, True)
@@ -561,6 +586,7 @@ def post_key_to_jhs(key_code: int, repeats: int = 1) -> None:
 
 
 def post_text_to_jhs(text: str) -> None:
+    require_accessibility_trusted()
     pid = jhs_process_id()
     for char in text:
         code_units = char.encode("utf-16-le")
@@ -583,23 +609,44 @@ def post_text_to_jhs(text: str) -> None:
         time.sleep(0.015)
 
 
-def jhs_ax_window() -> int:
+def copy_first_jhs_window() -> int | None:
     app = APP_SERVICES.AXUIElementCreateApplication(jhs_process_id())
     if not app:
-        raise RuntimeError("无法连接集换社无障碍窗口")
-    ax_set_messaging_timeout(int(app))
-    windows = ax_copy_attribute(int(app), "AXWindows")
-    if not windows:
-        raise RuntimeError("未找到集换社窗口")
+        return None
     try:
-        if CORE_FOUNDATION.CFArrayGetCount(ctypes.c_void_p(windows)) <= 0:
-            raise RuntimeError("未找到集换社窗口")
-        window = CORE_FOUNDATION.CFArrayGetValueAtIndex(ctypes.c_void_p(windows), 0)
-        if not window:
-            raise RuntimeError("未找到集换社窗口")
-        return int(CORE_FOUNDATION.CFRetain(ctypes.c_void_p(window)))
+        ax_set_messaging_timeout(int(app))
+        windows = ax_copy_attribute(int(app), "AXWindows")
+        if not windows:
+            return None
+        try:
+            if CORE_FOUNDATION.CFArrayGetCount(ctypes.c_void_p(windows)) <= 0:
+                return None
+            window = CORE_FOUNDATION.CFArrayGetValueAtIndex(ctypes.c_void_p(windows), 0)
+            if not window:
+                return None
+            return int(CORE_FOUNDATION.CFRetain(ctypes.c_void_p(window)))
+        finally:
+            cf_release(windows)
     finally:
-        cf_release(windows)
+        cf_release(app)
+
+
+def jhs_ax_window() -> int:
+    require_accessibility_trusted()
+    for _ in range(6):
+        window = copy_first_jhs_window()
+        if window:
+            return window
+        time.sleep(0.5)
+
+    restart_jhs_app()
+    for _ in range(8):
+        window = copy_first_jhs_window()
+        if window:
+            return window
+        time.sleep(0.6)
+
+    raise RuntimeError("未找到集换社窗口，已尝试重启 App；请确认集换社窗口可见，并检查 Python/终端的辅助功能权限")
 
 
 def iter_jhs_ax_elements(max_depth: int = 20, max_nodes: int = 1600, max_seconds: float = 8.0):

@@ -2035,6 +2035,17 @@ async function assertJhsListingHelperReady() {
     }
   }
 }
+async function openAccessibilitySettingsFromDashboardServer() {
+  const response = await fetch(`${LOCAL_DASHBOARD_SERVER_BASE_URL}/open-accessibility-settings`, {
+    method: 'POST',
+    cache: 'no-store'
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.ok) {
+    throw new Error(result.error || '无法打开辅助功能设置');
+  }
+  return result;
+}
 async function extractScreenshotItemsViaDirectApi(config, imageDataUrl) {
   const headers = {
     'Content-Type': 'application/json'
@@ -3165,6 +3176,9 @@ function BulkJhsListingModal({ items, onListed, onClose, onToast }) {
   const [busy, setBusy] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [results, setResults] = useState([]);
+  const [bulkError, setBulkError] = useState('');
+  const [serviceStatus, setServiceStatus] = useState(null);
+  const [serviceBusy, setServiceBusy] = useState(false);
   const eligibleItems = useMemo(() => (
     queueItems.filter(item => !skipListed || !item.jhsListed)
   ), [queueItems, skipListed]);
@@ -3172,8 +3186,45 @@ function BulkJhsListingModal({ items, onListed, onClose, onToast }) {
     eligibleItems.filter(item => !buildJhsListingDraft(item).cardCode || (normalizeOptionalPrice(priceById[item.id]) ?? 0) <= 0)
   ), [eligibleItems, priceById]);
   const canStart = eligibleItems.length > 0 && blockedItems.length === 0 && !busy;
+  const needsAccessibilityPermission = bulkError.includes('辅助功能权限') || bulkError.includes('辅助功能');
   const updateItemPrice = (id, value) => {
     setPriceById(prev => ({...prev, [id]: value}));
+  };
+  const helperStatusText = (status) => {
+    if (!status) return '';
+    if (!status.ok) return status.error || '本地上架服务未启动';
+    if (status.accessibilityTrusted === false) return `服务已启动，但辅助功能未授权：${status.executable || ''}`;
+    return '服务已启动，辅助功能权限正常';
+  };
+  const startLocalListingService = async () => {
+    setServiceBusy(true);
+    setBulkError('');
+    try {
+      await startJhsListingHelperFromDashboardServer();
+      const health = await checkJhsListingHelperReady();
+      setServiceStatus(health);
+      if (health.accessibilityTrusted === false) {
+        setBulkError(`本地上架服务已启动，但辅助功能权限未生效；当前执行程序：${health.executable || '未知'}`);
+        onToast?.('服务已启动，但辅助功能权限未生效');
+      } else {
+        onToast?.('本地上架服务已启动 ✓');
+      }
+    } catch (error) {
+      const message = getJhsListingServiceErrorMessage(error);
+      setServiceStatus({ok:false, error:message});
+      setBulkError(message);
+      onToast?.(`启动服务失败：${message}`);
+    } finally {
+      setServiceBusy(false);
+    }
+  };
+  const openAccessibilitySettings = async () => {
+    try {
+      await openAccessibilitySettingsFromDashboardServer();
+      onToast?.('已打开辅助功能设置，请勾选 Terminal 或当前 Python 后重试');
+    } catch (error) {
+      onToast?.(`打开辅助功能设置失败：${getJhsListingServiceErrorMessage(error)}`);
+    }
   };
 
   const runBulkListing = async () => {
@@ -3183,9 +3234,14 @@ function BulkJhsListingModal({ items, onListed, onClose, onToast }) {
     }
     setBusy(true);
     setResults([]);
+    setBulkError('');
     setCurrentIndex(0);
     try {
-      await assertJhsListingHelperReady();
+      const health = await assertJhsListingHelperReady();
+      setServiceStatus(health);
+      if (health.accessibilityTrusted === false) {
+        throw new Error(`本地上架服务已启动，但辅助功能权限未生效；当前执行程序：${health.executable || '未知'}`);
+      }
       const finalResults = [];
       for (let index = 0; index < eligibleItems.length; index += 1) {
         const item = eligibleItems[index];
@@ -3227,6 +3283,10 @@ function BulkJhsListingModal({ items, onListed, onClose, onToast }) {
       }
       const listedCount = finalResults.filter(result => result.ok && result.status === 'listed').length;
       if (listedCount > 0) onToast?.(`批量上架完成 ${listedCount}/${eligibleItems.length} ✓`);
+    } catch (error) {
+      const message = getJhsListingServiceErrorMessage(error);
+      setBulkError(message);
+      onToast?.(`批量上架启动失败：${message}`);
     } finally {
       setBusy(false);
       setCurrentIndex(-1);
@@ -3268,6 +3328,16 @@ function BulkJhsListingModal({ items, onListed, onClose, onToast }) {
                 <span>跳过已有“已上架”标签的商品</span>
               </label>
             </div>
+            <div style={{marginTop:14, display:'flex', gap:10, alignItems:'center', flexWrap:'wrap'}}>
+              <button className="btn btn-secondary" onClick={startLocalListingService} disabled={busy || serviceBusy}>
+                {serviceBusy ? '启动中...' : '启动/检测本地服务'}
+              </button>
+              {serviceStatus && (
+                <span style={{fontSize:12, color: serviceStatus.ok && serviceStatus.accessibilityTrusted !== false ? 'var(--green)' : 'var(--orange)'}}>
+                  {helperStatusText(serviceStatus)}
+                </span>
+              )}
+            </div>
             <div className="form-group">
               <label className={`form-check-option ${confirmAdd ? 'active' : ''}`}>
                 <input type="checkbox" checked={confirmAdd} onChange={e => setConfirmAdd(e.target.checked)} disabled={busy} />
@@ -3282,6 +3352,14 @@ function BulkJhsListingModal({ items, onListed, onClose, onToast }) {
               <div style={{marginTop:12, padding:'12px 14px', borderRadius:10, background:'var(--red-bg)', border:'1px solid var(--red-border)', color:'var(--red)', fontSize:12, lineHeight:1.7}}>
                 {blockedItems.slice(0, 5).map(item => <div key={item.id}>#{item.id} {item.name} 缺少集换社编号或有效上架价格</div>)}
                 {blockedItems.length > 5 && <div>还有 {blockedItems.length - 5} 个商品需要先补资料</div>}
+              </div>
+            )}
+            {bulkError && (
+              <div style={{marginTop:12, padding:'12px 14px', borderRadius:10, background:'var(--red-bg)', border:'1px solid var(--red-border)', color:'var(--red)', fontSize:12, lineHeight:1.7}}>
+                <div>{bulkError}</div>
+                {needsAccessibilityPermission && (
+                  <button className="btn btn-secondary" style={{marginTop:10}} onClick={openAccessibilitySettings} disabled={busy}>打开辅助功能设置</button>
+                )}
               </div>
             )}
 
