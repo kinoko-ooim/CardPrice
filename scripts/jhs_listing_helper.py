@@ -310,6 +310,28 @@ def wait_until_text(pattern: str, timeout: float = 10) -> str:
     raise RuntimeError(f"等待界面超时：{pattern}")
 
 
+def existing_same_product_count(text: str) -> int:
+    compact = re.sub(r"\s+", "", text or "")
+    match = re.search(r"已上架同类商品(\d+)", compact)
+    if not match:
+        return 0
+    try:
+        return int(match.group(1))
+    except ValueError:
+        return 0
+
+
+def ensure_no_existing_same_product() -> None:
+    text = visible_text(timeout=2)
+    count = existing_same_product_count(text)
+    if count <= 0:
+        return
+    raise RuntimeError(
+        f"检测到集换社已有同类上架商品 {count} 条，已停止，避免旧记录和当前记录同时存在；"
+        "请先手动下架旧商品后再重新上架"
+    )
+
+
 def press_button_text(*labels: str, attempts: int = 3, pause: float = 0.6) -> bool:
     label_set = {label for label in labels if label}
 
@@ -497,6 +519,9 @@ def fill_listing_form(payload: dict[str, Any]) -> dict[str, Any]:
 
     select_listing_category(is_psa10)
     steps.append("已选择评级/品相")
+
+    ensure_no_existing_same_product()
+    steps.append("未发现已上架同类商品")
 
     fill_price_field(price)
     steps.append(f"已填写价格 {price:.2f}")
