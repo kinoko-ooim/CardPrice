@@ -2000,6 +2000,13 @@ function getJhsListingServiceErrorMessage(error) {
   }
   return message || '自动上架失败';
 }
+function getLocalDashboardServerErrorMessage(error) {
+  const message = String(error?.message || error || '').trim();
+  if (/Failed to fetch|Load failed|NetworkError|CORS|AbortError/i.test(message)) {
+    return '页面服务 8000 未启动，网页按钮不能直接拉起 Python；请先运行：python3 scripts/dashboard_server.py，然后刷新页面';
+  }
+  return message || '页面服务 8000 调用失败';
+}
 async function checkJhsListingHelperReady() {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 2500);
@@ -2019,10 +2026,15 @@ async function checkJhsListingHelperReady() {
   }
 }
 async function startJhsListingHelperFromDashboardServer() {
-  const response = await fetch(`${LOCAL_DASHBOARD_SERVER_BASE_URL}/start-jhs-listing-helper`, {
-    method: 'POST',
-    cache: 'no-store'
-  });
+  let response;
+  try {
+    response = await fetch(`${LOCAL_DASHBOARD_SERVER_BASE_URL}/start-jhs-listing-helper`, {
+      method: 'POST',
+      cache: 'no-store'
+    });
+  } catch (error) {
+    throw new Error(getLocalDashboardServerErrorMessage(error));
+  }
   const result = await response.json().catch(() => ({}));
   if (!response.ok || !result.ok) {
     throw new Error(result.error || '本地上架服务自动启动失败');
@@ -3215,6 +3227,19 @@ function BulkJhsListingModal({ items, onListed, onClose, onToast }) {
     setServiceBusy(true);
     setBulkError('');
     try {
+      try {
+        const existingHealth = await checkJhsListingHelperReady();
+        setServiceStatus(existingHealth);
+        if (existingHealth.accessibilityTrusted === false) {
+          setBulkError(`本地上架服务已启动，但辅助功能权限未生效；当前执行程序：${existingHealth.executable || '未知'}`);
+          onToast?.('服务已启动，但辅助功能权限未生效');
+        } else {
+          onToast?.('本地上架服务已启动 ✓');
+        }
+        return;
+      } catch (_ignored) {
+        // 8767 没有响应时，再请求 8000 页面服务去拉起 helper。
+      }
       await startJhsListingHelperFromDashboardServer();
       const health = await checkJhsListingHelperReady();
       setServiceStatus(health);
