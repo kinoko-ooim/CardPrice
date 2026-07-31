@@ -4,7 +4,7 @@ if (typeof React === 'undefined') {
   throw new Error('React 未加载，无法初始化 Tab0754');
 }
 var STORAGE_0754 = '0754-sold-records';
-var RECOVERY_0754_20260731_KEY = '0754-recovery-2026-07-31-v1';
+var RECOVERY_0754_20260731_KEY = '0754-recovery-2026-07-31-v2';
 var RECOVERY_0754_20260731_RECORDS = [
   {id:754060101,date:'2026-06-01',amount:1.04,createdAt:'2026-06-01T00:00:01.000Z'},
   {id:754060102,date:'2026-06-01',amount:100,createdAt:'2026-06-01T00:00:02.000Z'},
@@ -14,7 +14,22 @@ var RECOVERY_0754_20260731_RECORDS = [
   {id:754041704,date:'2026-04-17',amount:137.87,createdAt:'2026-04-17T00:00:04.000Z'},
   {id:754041705,date:'2026-04-17',amount:125.68,createdAt:'2026-04-17T00:00:05.000Z'},
   {id:754041706,date:'2026-04-17',amount:17.44,createdAt:'2026-04-17T00:00:06.000Z'},
-  {id:754041707,date:'2026-04-17',amount:13.69,createdAt:'2026-04-17T00:00:07.000Z'}
+  {id:754041707,date:'2026-04-17',amount:13.69,createdAt:'2026-04-17T00:00:07.000Z'},
+  {id:754041708,date:'2026-04-17',amount:13.08,createdAt:'2026-04-17T00:00:08.000Z'},
+  {id:754041709,date:'2026-04-17',amount:36.62,createdAt:'2026-04-17T00:00:09.000Z'},
+  {id:754041710,date:'2026-04-17',amount:100.78,createdAt:'2026-04-17T00:00:10.000Z'},
+  {id:754041711,date:'2026-04-17',amount:37.12,createdAt:'2026-04-17T00:00:11.000Z'},
+  {id:754041712,date:'2026-04-17',amount:296.45,createdAt:'2026-04-17T00:00:12.000Z'},
+  {id:754041713,date:'2026-04-17',amount:27.2,createdAt:'2026-04-17T00:00:13.000Z'},
+  {id:754041714,date:'2026-04-17',amount:56.67,createdAt:'2026-04-17T00:00:14.000Z'},
+  {id:754041715,date:'2026-04-17',amount:113.36,createdAt:'2026-04-17T00:00:15.000Z'},
+  {id:754041716,date:'2026-04-17',amount:67.31,createdAt:'2026-04-17T00:00:16.000Z'},
+  {id:754041717,date:'2026-04-17',amount:66.62,createdAt:'2026-04-17T00:00:17.000Z'},
+  {id:754041718,date:'2026-04-17',amount:2.61,createdAt:'2026-04-17T00:00:18.000Z'},
+  {id:754041719,date:'2026-04-17',amount:10.46,createdAt:'2026-04-17T00:00:19.000Z'},
+  {id:754041720,date:'2026-04-17',amount:3.2,createdAt:'2026-04-17T00:00:20.000Z'},
+  {id:754041721,date:'2026-04-17',amount:1.8,createdAt:'2026-04-17T00:00:21.000Z'},
+  {id:754041722,date:'2026-04-17',amount:10.46,createdAt:'2026-04-17T00:00:22.000Z'}
 ];
 
 function isSame0754Record(left, right) {
@@ -46,9 +61,14 @@ function recover0754RecordsFrom20260731(data) {
     return true;
   });
 
+  var expectedOccurrences = {};
   RECOVERY_0754_20260731_RECORDS.forEach(function(expected) {
-    var exists = recovered.some(function(record) { return isSame0754Record(record, expected); });
-    if (!exists) recovered.push(expected);
+    var key = expected.date + '|' + Math.round(Number(expected.amount) * 100);
+    expectedOccurrences[key] = (expectedOccurrences[key] || 0) + 1;
+    var existingCount = recovered.filter(function(record) {
+      return isSame0754Record(record, expected);
+    }).length;
+    if (existingCount < expectedOccurrences[key]) recovered.push(expected);
   });
 
   return {
