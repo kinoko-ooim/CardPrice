@@ -1019,7 +1019,7 @@ const SUPABASE_DEFAULT_CONFIG = {
 const AI_DEFAULT_CONFIG = {
   apiKey: '',
   apiUrl: 'http://43.155.156.14:8080/v1/chat/completions',
-  model: 'gpt-5.4',
+  model: 'gpt-5.6Sol',
   authHeader: 'Authorization',
   authScheme: 'Bearer',
   useJsonSchema: false
@@ -1542,7 +1542,11 @@ function readAiConfig() {
   try {
     const saved = localStorage.getItem(AI_CONFIG_KEY);
     if (!saved) return { ...AI_DEFAULT_CONFIG };
-    return normalizeAiConfig(JSON.parse(saved));
+    const config = normalizeAiConfig(JSON.parse(saved));
+    if (/^gpt-5\.(4|5)$/i.test(config.model)) {
+      return { ...config, model: AI_DEFAULT_CONFIG.model };
+    }
+    return config;
   } catch (error) {
     return { ...AI_DEFAULT_CONFIG };
   }
@@ -2105,7 +2109,7 @@ async function fetchDirectAiResponse(config, requestBody) {
 }
 function getAiModelFallbacks(model) {
   const normalizedModel = String(model || '').trim().toLowerCase();
-  return normalizedModel === 'gpt-5.5' ? ['gpt-5.4'] : [];
+  return /^gpt-5\.(4|5)$/.test(normalizedModel) ? [AI_DEFAULT_CONFIG.model] : [];
 }
 async function fetchDirectAiJson(config, requestBody) {
   const primaryModel = String(requestBody?.model || config.model || '').trim();
@@ -4065,7 +4069,7 @@ function AiConfigModal({
                   className="form-input"
                   value={config.model}
                   onChange={e => onChange('model', e.target.value)}
-                  placeholder="gpt-5.4"
+                  placeholder="gpt-5.6Sol"
                 />
               </div>
               <div className="form-group">
