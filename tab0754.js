@@ -4,6 +4,64 @@ if (typeof React === 'undefined') {
   throw new Error('React 未加载，无法初始化 Tab0754');
 }
 var STORAGE_0754 = '0754-sold-records';
+var RECOVERY_0754_20260731_KEY = '0754-recovery-2026-07-31-v1';
+var RECOVERY_0754_20260731_RECORDS = [
+  {id:754060101,date:'2026-06-01',amount:1.04,createdAt:'2026-06-01T00:00:01.000Z'},
+  {id:754060102,date:'2026-06-01',amount:100,createdAt:'2026-06-01T00:00:02.000Z'},
+  {id:754041701,date:'2026-04-17',amount:112.61,createdAt:'2026-04-17T00:00:01.000Z'},
+  {id:754041702,date:'2026-04-17',amount:21,createdAt:'2026-04-17T00:00:02.000Z'},
+  {id:754041703,date:'2026-04-17',amount:5.23,createdAt:'2026-04-17T00:00:03.000Z'},
+  {id:754041704,date:'2026-04-17',amount:137.87,createdAt:'2026-04-17T00:00:04.000Z'},
+  {id:754041705,date:'2026-04-17',amount:125.68,createdAt:'2026-04-17T00:00:05.000Z'},
+  {id:754041706,date:'2026-04-17',amount:17.44,createdAt:'2026-04-17T00:00:06.000Z'},
+  {id:754041707,date:'2026-04-17',amount:13.69,createdAt:'2026-04-17T00:00:07.000Z'}
+];
+
+function isSame0754Record(left, right) {
+  return left.date === right.date && Math.round(Number(left.amount) * 100) === Math.round(Number(right.amount) * 100);
+}
+
+function recover0754RecordsFrom20260731(data) {
+  var normalized = normalize0754Records(data);
+  var recoveryDone = false;
+  try { recoveryDone = localStorage.getItem(RECOVERY_0754_20260731_KEY) === 'done'; }
+  catch (e) {}
+  if (recoveryDone) return {records:normalized, changed:false, applied:false};
+
+  var intendedDeletion = {date:'2026-07-31',amount:72};
+  var matchesScreenshot = normalized.some(function(record) {
+    if (isSame0754Record(record, intendedDeletion)) return true;
+    return RECOVERY_0754_20260731_RECORDS.some(function(expected) {
+      return isSame0754Record(record, expected);
+    });
+  });
+  if (!matchesScreenshot) return {records:normalized, changed:false, applied:false};
+
+  var removedIntendedRecord = false;
+  var recovered = normalized.filter(function(record) {
+    if (!removedIntendedRecord && isSame0754Record(record, intendedDeletion)) {
+      removedIntendedRecord = true;
+      return false;
+    }
+    return true;
+  });
+
+  RECOVERY_0754_20260731_RECORDS.forEach(function(expected) {
+    var exists = recovered.some(function(record) { return isSame0754Record(record, expected); });
+    if (!exists) recovered.push(expected);
+  });
+
+  return {
+    records: normalize0754Records(recovered),
+    changed: removedIntendedRecord || recovered.length !== normalized.length,
+    applied: true
+  };
+}
+
+function mark0754RecoveryComplete() {
+  try { localStorage.setItem(RECOVERY_0754_20260731_KEY, 'done'); }
+  catch (e) {}
+}
 
 function Tab0754(props) {
   props = props || {};
@@ -61,6 +119,12 @@ function Tab0754(props) {
     supabaseClientRef.current = null;
 
     if (!hasSupabaseCredentials(supabaseConfig)) {
+      var localRecovery = recover0754RecordsFrom20260731(recordsRef.current);
+      if (localRecovery.changed) {
+        recordsRef.current = localRecovery.records;
+        setRecords(localRecovery.records);
+      }
+      if (localRecovery.applied) mark0754RecoveryComplete();
       remoteReadyRef.current = true;
       return function() {};
     }
@@ -76,13 +140,28 @@ function Tab0754(props) {
         if (cancelled) return;
 
         if (remoteState.found) {
+          var remoteRecovery = recover0754RecordsFrom20260731(remoteState.payload);
+          if (remoteRecovery.changed) {
+            await savePayloadToSupabase(client, scopedConfig, remoteRecovery.records);
+          }
           skipNextRemoteSaveRef.current = true;
-          setRecords(normalize0754Records(remoteState.payload));
+          recordsRef.current = remoteRecovery.records;
+          setRecords(remoteRecovery.records);
+          if (remoteRecovery.applied) mark0754RecoveryComplete();
         } else {
-          await savePayloadToSupabase(client, scopedConfig, normalize0754Records(recordsRef.current));
+          var initialRecovery = recover0754RecordsFrom20260731(recordsRef.current);
+          recordsRef.current = initialRecovery.records;
+          if (initialRecovery.changed) setRecords(initialRecovery.records);
+          await savePayloadToSupabase(client, scopedConfig, initialRecovery.records);
+          if (initialRecovery.applied) mark0754RecoveryComplete();
         }
       } catch (error) {
         if (!cancelled) {
+          var fallbackRecovery = recover0754RecordsFrom20260731(recordsRef.current);
+          if (fallbackRecovery.changed) {
+            recordsRef.current = fallbackRecovery.records;
+            setRecords(fallbackRecovery.records);
+          }
           console.error('0754 云端同步初始化失败', error);
           showToast(error && error.message ? ('0754 云端同步失败：' + error.message) : '0754 云端同步失败');
         }
@@ -438,7 +517,7 @@ function Tab0754(props) {
           C('td', S('style', {padding:'10px 20px',textAlign:'right',fontSize:14,fontWeight:600,fontVariantNumeric:'tabular-nums',color:'var(--green)'}), fmtY(rec.amount)),
           C('td', S('style', {padding:'10px 20px',textAlign:'right',fontSize:13,fontVariantNumeric:'tabular-nums',color:'var(--text-2)'}), fmtY(cumsum)),
           C('td', S('style', {padding:'10px 20px',textAlign:'center'}),
-            C('button', P({onClick:function(){delRec(rec.id);}},
+            C('button', P({onClick:delRec.bind(null, rec.id)},
               S('style', {color:'var(--red)',cursor:'pointer',background:'none',border:'none',
                 fontSize:18,padding:'2px 6px',borderRadius:4,title:'\u5220\u9664'})), '\u2715'))
         )
