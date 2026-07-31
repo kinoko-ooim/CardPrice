@@ -1019,7 +1019,7 @@ const SUPABASE_DEFAULT_CONFIG = {
 const AI_DEFAULT_CONFIG = {
   apiKey: '',
   apiUrl: 'http://43.155.156.14:8080/v1/chat/completions',
-  model: 'gpt-5.5',
+  model: 'gpt-5.4',
   authHeader: 'Authorization',
   authScheme: 'Bearer',
   useJsonSchema: false
@@ -2103,15 +2103,39 @@ async function fetchDirectAiResponse(config, requestBody) {
     body: JSON.stringify(requestBody)
   });
 }
+function getAiModelFallbacks(model) {
+  const normalizedModel = String(model || '').trim().toLowerCase();
+  return normalizedModel === 'gpt-5.5' ? ['gpt-5.4'] : [];
+}
+async function fetchDirectAiJson(config, requestBody) {
+  const primaryModel = String(requestBody?.model || config.model || '').trim();
+  const models = [primaryModel, ...getAiModelFallbacks(primaryModel)].filter(Boolean);
+  let lastResult = null;
+
+  for (let index = 0; index < models.length; index += 1) {
+    const requestModel = models[index];
+    const response = await fetchDirectAiResponse(config, { ...requestBody, model: requestModel });
+    const text = await response.text();
+    const data = parseJsonMaybe(text);
+    lastResult = { response, text, data, requestModel, attemptedModels: models.slice(0, index + 1) };
+    if (response.ok || response.status !== 503 || index === models.length - 1) {
+      return lastResult;
+    }
+  }
+
+  return lastResult;
+}
 async function extractScreenshotItemsViaDirectApi(config, imageDataUrl) {
-  const response = await fetchDirectAiResponse(
+  const result = await fetchDirectAiJson(
     config,
     buildAiScreenshotRequestBody(config, imageDataUrl)
   );
-  const text = await response.text();
-  const data = parseJsonMaybe(text);
+  const { response, text, data, requestModel, attemptedModels } = result;
   if (!response.ok) {
-    const message = data?.error?.message || data?.error || data?.message || text || `直连 AI API 调用失败 (${response.status})`;
+    const baseMessage = data?.error?.message || data?.error || data?.message || text || `直连 AI API 调用失败 (${response.status})`;
+    const message = attemptedModels.length > 1
+      ? `${baseMessage}（已自动尝试 ${attemptedModels.join('、')}）`
+      : baseMessage;
     throw new Error(message);
   }
 
@@ -2123,7 +2147,7 @@ async function extractScreenshotItemsViaDirectApi(config, imageDataUrl) {
   return {
     items: parseAiItemsFromText(assistantText),
     rawText: assistantText,
-    model: data?.model || config.model,
+    model: data?.model || requestModel,
     source: '直连API'
   };
 }
@@ -2131,7 +2155,7 @@ async function testDirectAiConnection(config) {
   if (!hasAiCredentials(config)) {
     throw new Error('请先填写 API URL、API Key 和 AI_MODEL');
   }
-  const response = await fetchDirectAiResponse(config, {
+  const result = await fetchDirectAiJson(config, {
     model: config.model,
     temperature: 0,
     messages: [
@@ -2139,16 +2163,18 @@ async function testDirectAiConnection(config) {
       { role: 'user', content: 'ping' }
     ]
   });
-  const text = await response.text();
-  const data = parseJsonMaybe(text);
+  const { response, text, data, requestModel, attemptedModels } = result;
   if (!response.ok) {
-    const message = data?.error?.message || data?.error || data?.message || text || `AI 提供方请求失败 (${response.status})`;
+    const baseMessage = data?.error?.message || data?.error || data?.message || text || `AI 提供方请求失败 (${response.status})`;
+    const message = attemptedModels.length > 1
+      ? `${baseMessage}（已自动尝试 ${attemptedModels.join('、')}）`
+      : baseMessage;
     throw new Error(message);
   }
   const assistantText = extractAssistantTextFromAiResponse(data);
   return {
     ok: true,
-    model: data?.model || config.model,
+    model: data?.model || requestModel,
     responseText: assistantText || 'OK'
   };
 }
@@ -4039,7 +4065,7 @@ function AiConfigModal({
                   className="form-input"
                   value={config.model}
                   onChange={e => onChange('model', e.target.value)}
-                  placeholder="gpt-5.5"
+                  placeholder="gpt-5.4"
                 />
               </div>
               <div className="form-group">
