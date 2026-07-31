@@ -138,6 +138,12 @@ function Tab0754(props) {
     remoteReadyRef.current = false;
     supabaseClientRef.current = null;
 
+    var immediateRecovery = recover0754RecordsFrom20260731(recordsRef.current);
+    if (immediateRecovery.changed) {
+      recordsRef.current = immediateRecovery.records;
+      setRecords(immediateRecovery.records);
+    }
+
     if (!hasSupabaseCredentials(supabaseConfig)) {
       var localRecovery = recover0754RecordsFrom20260731(recordsRef.current);
       if (localRecovery.changed) {
@@ -340,7 +346,7 @@ function Tab0754(props) {
 
   function addRecord() {
     var amt = parseFloat(inputAmount);
-    if (!amt || amt <= 0) return;
+    if (!Number.isFinite(amt) || amt === 0) return;
     saveRecords(records.concat({
       id: Date.now(),
       date: new Date().toISOString().slice(0, 10),
@@ -354,7 +360,10 @@ function Tab0754(props) {
     saveRecords(records.filter(function(r) { return r.id !== id; }));
   }
 
-  function fmtY(v) { return '\u00A5' + Number(v || 0).toFixed(2); }
+  function fmtY(v) {
+    var amount = Number(v || 0);
+    return (amount < 0 ? '-' : '') + '\u00A5' + Math.abs(amount).toFixed(2);
+  }
   function fmtD(d) { return String(d || '--------').slice(5); }
   function S(k, v) { var o = {}; o[k] = v; return o; }
 
@@ -534,7 +543,7 @@ function Tab0754(props) {
         C('tr', P({key:rec.id}, S('style', {borderTop:idx>0?'1px solid rgba(255,255,255,0.06)':'none'})),
           C('td', S('style', {padding:'10px 20px',fontSize:13,color:'var(--text-2)'}), idx+1),
           C('td', S('style', {padding:'10px 20px',fontSize:13,fontVariantNumeric:'tabular-nums',background:rowBg}), fmtD(rec.date)),
-          C('td', S('style', {padding:'10px 20px',textAlign:'right',fontSize:14,fontWeight:600,fontVariantNumeric:'tabular-nums',color:'var(--green)'}), fmtY(rec.amount)),
+          C('td', S('style', {padding:'10px 20px',textAlign:'right',fontSize:14,fontWeight:600,fontVariantNumeric:'tabular-nums',color:rec.amount<0?'var(--red)':'var(--green)'}), fmtY(rec.amount)),
           C('td', S('style', {padding:'10px 20px',textAlign:'right',fontSize:13,fontVariantNumeric:'tabular-nums',color:'var(--text-2)'}), fmtY(cumsum)),
           C('td', S('style', {padding:'10px 20px',textAlign:'center'}),
             C('button', P({onClick:delRec.bind(null, rec.id)},
