@@ -33,6 +33,7 @@ ALLOWED_AI_PROXY_ORIGINS = {
     "null",
     f"http://{HOST}:{PORT}",
     f"http://localhost:{PORT}",
+    "https://kinoko-ooim.github.io",
 }
 
 
@@ -144,6 +145,8 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        if self.headers.get("Access-Control-Request-Private-Network") == "true":
+            self.send_header("Access-Control-Allow-Private-Network", "true")
         self.end_headers()
         self.wfile.write(body)
 
