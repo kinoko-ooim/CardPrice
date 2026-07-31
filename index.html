@@ -1993,6 +1993,7 @@ function getDirectAiErrorMessage(error) {
 }
 const JHS_LISTING_HELPER_BASE_URL = 'http://127.0.0.1:8767';
 const LOCAL_DASHBOARD_SERVER_BASE_URL = 'http://127.0.0.1:8000';
+const LOCAL_AI_PROXY_URL = `${LOCAL_DASHBOARD_SERVER_BASE_URL}/api/ai-proxy`;
 function getJhsListingServiceErrorMessage(error) {
   const message = String(error?.message || error || '').trim();
   if (/Failed to fetch|Load failed|NetworkError|CORS|AbortError/i.test(message)) {
@@ -2064,7 +2065,15 @@ async function openAccessibilitySettingsFromDashboardServer() {
   }
   return result;
 }
-async function extractScreenshotItemsViaDirectApi(config, imageDataUrl) {
+function canUseLocalAiProxy() {
+  const hostname = String(window.location.hostname || '').toLowerCase();
+  return window.location.protocol === 'file:'
+    || hostname === '127.0.0.1'
+    || hostname === 'localhost'
+    || hostname === '::1';
+}
+async function fetchDirectAiResponse(config, requestBody) {
+  const apiUrl = normalizeAiApiUrl(config.apiUrl);
   const headers = {
     'Content-Type': 'application/json'
   };
@@ -2072,11 +2081,29 @@ async function extractScreenshotItemsViaDirectApi(config, imageDataUrl) {
     ? `${config.authScheme} ${config.apiKey}`
     : config.apiKey;
 
-  const response = await fetch(normalizeAiApiUrl(config.apiUrl), {
+  if (canUseLocalAiProxy()) {
+    try {
+      return await fetch(LOCAL_AI_PROXY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiUrl, headers, body: requestBody })
+      });
+    } catch (proxyError) {
+      console.warn('本地 AI 代理不可用，尝试浏览器直连', proxyError);
+    }
+  }
+
+  return fetch(apiUrl, {
     method: 'POST',
     headers,
-    body: JSON.stringify(buildAiScreenshotRequestBody(config, imageDataUrl))
+    body: JSON.stringify(requestBody)
   });
+}
+async function extractScreenshotItemsViaDirectApi(config, imageDataUrl) {
+  const response = await fetchDirectAiResponse(
+    config,
+    buildAiScreenshotRequestBody(config, imageDataUrl)
+  );
   const text = await response.text();
   const data = parseJsonMaybe(text);
   if (!response.ok) {
@@ -2100,24 +2127,13 @@ async function testDirectAiConnection(config) {
   if (!hasAiCredentials(config)) {
     throw new Error('请先填写 API URL、API Key 和 AI_MODEL');
   }
-  const headers = {
-    'Content-Type': 'application/json'
-  };
-  headers[config.authHeader || 'Authorization'] = config.authScheme
-    ? `${config.authScheme} ${config.apiKey}`
-    : config.apiKey;
-
-  const response = await fetch(normalizeAiApiUrl(config.apiUrl), {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model: config.model,
-      temperature: 0,
-      messages: [
-        { role: 'system', content: 'Reply with OK only.' },
-        { role: 'user', content: 'ping' }
-      ]
-    })
+  const response = await fetchDirectAiResponse(config, {
+    model: config.model,
+    temperature: 0,
+    messages: [
+      { role: 'system', content: 'Reply with OK only.' },
+      { role: 'user', content: 'ping' }
+    ]
   });
   const text = await response.text();
   const data = parseJsonMaybe(text);

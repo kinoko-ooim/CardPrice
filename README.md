@@ -52,7 +52,7 @@
 - 页面直接用 `file://` 打开时，如果浏览器禁止 `sessionStorage`，密码验证会自动退回到当前页面内存状态，不影响进入后台。
 - 密码入口带有独立于 React 的兜底表单：即使 React/Babel/CDN 脚本加载失败，也会保留可输入的密码框，避免只显示背景空白页。
 - “截图识别新增 -> AI识别”兼容两种接入方式：如果在弹窗里的“AI配置”保存了 OpenAI 兼容直连 API，会优先直连识别；没有直连配置时，会继续使用 Supabase Edge Function `card-screenshot-extract-v1`。
-- 直连 API 配置保存在当前浏览器 `localStorage`，默认示例为 `http://43.155.156.14:8080/v1/chat/completions`、模型 `gpt-5.5`、`AI_USE_JSON_SCHEMA=false`。如果页面通过 `file://` 打开，API 网关需要允许浏览器 CORS（常见为 `Origin: null`），否则页面会提示直连被拦截并尝试 Supabase 兜底。
+- 直连 API 配置保存在当前浏览器 `localStorage`，默认示例为 `http://43.155.156.14:8080/v1/chat/completions`、模型 `gpt-5.5`、`AI_USE_JSON_SCHEMA=false`。通过 `python3 scripts/dashboard_server.py` 打开本地页面时，截图识别会由仅监听本机的 `http://127.0.0.1:8000/api/ai-proxy` 转发直连 AI 请求，并只允许本地页面来源，不再受外部 API 网关的浏览器 CORS 限制。如果直接用 `file://` 打开且 8000 服务未运行，仍会回退到浏览器直连和 Supabase 兜底，此时可能出现 CORS 报错。
 - “AI配置”里的 API Key 输入框默认隐藏，保存状态只显示打码摘要；配置弹窗提供“测试连接”按钮，会用轻量文本请求检查直连 API 是否可用，并显示成功、401/403 或 CORS 拦截等结果。
 - Supabase 模式仍然需要在 Edge Function Secrets 里配置 `AI_API_KEY`/`AI_MODEL` 等变量；如果 AI 提供方返回 401/403/429 等错误，页面会在弹窗里保留失败原因，方便检查 API Key、额度、模型权限和接口地址。
 - 截图识别结果自动配图时，日版编号会按“卡包代号 + 包内编号”精确匹配：例如 `SV2P-075/071` 会先定位 `SV2P -> Snow Hazard`，再只接受 `Snow Hazard` 里的 `075/071`，避免同编号跨卡包误配图；常见 SV 系列代号会用内置对照表兜底，减少 TCG Collector 卡包列表结构变化带来的漏配。

@@ -14,6 +14,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -26,6 +27,13 @@ HELPER_URL = "http://127.0.0.1:8767/health"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 HELPER_SCRIPT = PROJECT_ROOT / "scripts" / "jhs_listing_helper.py"
 HELPER_PROCESS: subprocess.Popen[str] | None = None
+MAX_AI_PROXY_BODY_BYTES = 24 * 1024 * 1024
+AI_PROXY_TIMEOUT_SECONDS = 180
+ALLOWED_AI_PROXY_ORIGINS = {
+    "null",
+    f"http://{HOST}:{PORT}",
+    f"http://localhost:{PORT}",
+}
 
 
 def helper_is_ready(timeout: float = 0.6) -> bool:
@@ -75,6 +83,47 @@ def open_accessibility_settings() -> dict[str, Any]:
     return {"ok": True, "status": "opened"}
 
 
+def proxy_ai_request(payload: dict[str, Any]) -> tuple[int, bytes, str]:
+    api_url = str(payload.get("apiUrl") or "").strip()
+    parsed_url = urllib.parse.urlparse(api_url)
+    if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
+        raise ValueError("AI API URL 必须是有效的 http/https 地址")
+
+    request_headers = payload.get("headers")
+    if not isinstance(request_headers, dict):
+        request_headers = {}
+    blocked_headers = {"connection", "content-length", "host", "origin", "referer"}
+    headers = {
+        str(key): str(value)
+        for key, value in request_headers.items()
+        if str(key).lower() not in blocked_headers
+    }
+    headers["Content-Type"] = "application/json"
+
+    request_body = payload.get("body")
+    if not isinstance(request_body, dict):
+        raise ValueError("AI 请求内容格式不正确")
+    encoded_body = json.dumps(request_body, ensure_ascii=False).encode("utf-8")
+    upstream_request = urllib.request.Request(
+        api_url,
+        data=encoded_body,
+        headers=headers,
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(upstream_request, timeout=AI_PROXY_TIMEOUT_SECONDS) as response:
+            content_type = response.headers.get("Content-Type", "application/json; charset=utf-8")
+            return response.status, response.read(), content_type
+    except urllib.error.HTTPError as error:
+        content_type = error.headers.get("Content-Type", "application/json; charset=utf-8")
+        return error.code, error.read(), content_type
+
+
+def ai_proxy_origin_allowed(origin: str | None) -> bool:
+    return not origin or origin in ALLOWED_AI_PROXY_ORIGINS
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, directory=str(PROJECT_ROOT), **kwargs)
@@ -82,9 +131,9 @@ class Handler(SimpleHTTPRequestHandler):
     def end_headers(self) -> None:
         path = self.path.split("?", 1)[0]
         if path in {"/", "/index.html"}:
-          self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
-          self.send_header("Pragma", "no-cache")
-          self.send_header("Expires", "0")
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
         super().end_headers()
 
     def json_response(self, status: int, payload: dict[str, Any]) -> None:
@@ -99,6 +148,10 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_OPTIONS(self) -> None:
+        if self.path.startswith("/api/ai-proxy") and not ai_proxy_origin_allowed(self.headers.get("Origin")):
+            self.send_response(403)
+            self.end_headers()
+            return
         self.json_response(200, {"ok": True})
 
     def do_GET(self) -> None:
@@ -108,6 +161,30 @@ class Handler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self) -> None:
+        if self.path.startswith("/api/ai-proxy"):
+            if not ai_proxy_origin_allowed(self.headers.get("Origin")):
+                self.send_response(403)
+                self.end_headers()
+                return
+            try:
+                content_length = int(self.headers.get("Content-Length", "0"))
+                if content_length <= 0 or content_length > MAX_AI_PROXY_BODY_BYTES:
+                    raise ValueError("AI 请求大小不合法")
+                payload = json.loads(self.rfile.read(content_length).decode("utf-8"))
+                if not isinstance(payload, dict):
+                    raise ValueError("AI 请求格式不正确")
+                status, body, content_type = proxy_ai_request(payload)
+                self.send_response(status)
+                self.send_header("Content-Type", content_type)
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body)
+            except (ValueError, json.JSONDecodeError) as error:
+                self.json_response(400, {"ok": False, "error": str(error)})
+            except Exception as error:
+                self.json_response(502, {"ok": False, "error": f"AI API 代理请求失败：{error}"})
+            return
         if self.path.startswith("/start-jhs-listing-helper"):
             result = start_helper()
             self.json_response(200 if result.get("ok") else 500, result)
