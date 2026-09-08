@@ -17,6 +17,8 @@
 
 `card-screenshot-extract-v1` 是给网页“截图识别新增 -> AI识别”按钮用的 Supabase Edge Function。
 
+2026-09-08：入口更新为“拍照 / 图片添加 -> AI识别”，函数提示词同时支持实体卡照片与商品截图，明确禁止把 HP、伤害值或推测的市场价当成售价。更新代码后需要重新部署该函数。手机优先使用此云函数，手动填写照片入库不依赖 AI 服务。
+
 部署方式：
 
 1. 在 Supabase Dashboard 打开 `Edge Functions`
