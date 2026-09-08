@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>卡价管理后台</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -876,6 +876,7 @@
     }
   </style>
   <link rel="stylesheet" href="skin-pokopia.css">
+  <link rel="stylesheet" href="mobile.css?v=20260908-1">
 </head>
 <body>
 <div class="auth-shell" id="auth-fallback" style="display:flex">
@@ -958,7 +959,7 @@
   });
 })();
 </script>
-<script src="tab0754.js?v=20260731-3"></script>
+<script src="tab0754.js?v=20260908-1"></script>
   <script type="text/babel" data-presets="env,react">
 const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
@@ -3473,7 +3474,7 @@ function BulkJhsListingModal({ items, onListed, onClose, onToast }) {
                 const parsedPrice = normalizeOptionalPrice(rowPrice);
                 const hasInvalidPrice = (parsedPrice ?? 0) <= 0;
                 return (
-                  <div key={item.id} style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) 130px auto',gap:10,alignItems:'center',padding:'10px 12px',border:`1px solid ${hasInvalidPrice ? 'var(--red-border)' : 'var(--border)'}`,borderRadius:10,background:isCurrent ? 'rgba(62,207,142,0.08)' : '#0f0f0f'}}>
+                  <div key={item.id} className="listing-queue-row" style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) 130px auto',gap:10,alignItems:'center',padding:'10px 12px',border:`1px solid ${hasInvalidPrice ? 'var(--red-border)' : 'var(--border)'}`,borderRadius:10,background:isCurrent ? 'rgba(62,207,142,0.08)' : '#0f0f0f'}}>
                     <div style={{minWidth:0}}>
                       <div style={{fontWeight:800,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>#{item.id} {item.name}</div>
                       <div style={{fontSize:11,color:'var(--text-3)',marginTop:3}}>
@@ -3938,7 +3939,7 @@ function EditModal({ item, onSave, onClose, onToast }) {
           ) : (
             <div style={{display:'flex',flexDirection:'column',gap:8}}>
               {form.sells.map((sell, idx) => (
-                <div key={sell.id} style={{display:'flex',gap:6,alignItems:'center'}}>
+                <div key={sell.id} className="sale-edit-row" style={{display:'flex',gap:6,alignItems:'center'}}>
                   <input className="form-input" type="number" placeholder="数量" value={sell.qty || ''} min={1}
                     onChange={e => updateSell(idx, 'qty', e.target.value)}
                     style={{width:60}} />
@@ -4391,7 +4392,7 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
               )}
               <input type="file" accept="image/*" style={{display:'none'}} onChange={e => handleFileChange(e.target.files?.[0])} />
             </label>
-            <div style={{flex:'1 1 320px', minWidth:260}}>
+            <div className="screenshot-instructions" style={{flex:'1 1 320px', minWidth:260}}>
               <div style={{fontSize:13, color:'var(--text-2)', lineHeight:1.7, marginBottom:12}}>
                 支持识别截图里的卡名、编号、价格和数量。可以点击选择截图，也可以直接 Ctrl/⌘ + V 粘贴截图。推荐优先用 AI 识别；本地 OCR 继续保留，适合作为备用方案。
               </div>
@@ -4432,7 +4433,7 @@ function ScreenshotImportModal({ onImport, onClose, showToast }) {
               <div style={{display:'flex', flexDirection:'column', gap:12}}>
                 {drafts.map((item, index) => (
                   <div key={`${item.cardCode || item.name}-${index}`} style={{border:'1px solid var(--border)', borderRadius:22, padding:14, background:'rgba(17,17,17,0.92)'}}>
-                    <div style={{display:'grid', gridTemplateColumns:'72px 1.4fr 1fr 0.8fr 0.7fr auto', gap:10, alignItems:'center'}}>
+                    <div className="recognition-row" style={{display:'grid', gridTemplateColumns:'72px 1.4fr 1fr 0.8fr 0.7fr auto', gap:10, alignItems:'center'}}>
                       <div style={{width:72, height:72, borderRadius:18, border:'1px solid var(--border)', background:'#111111', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden'}}>
                         {item.imageUrl ? (
                           <img src={item.imageUrl} alt={item.name} style={{width:'100%', height:'100%', objectFit:'contain'}} />
@@ -5242,7 +5243,7 @@ function OldCardInventoryTab({ showToast, supabaseConfig }) {
         <div className="table-container">
           <div className="table-wrap">
             <div className="table-scroll">
-            <table className="old-card-table">
+            <ResponsiveCardTable className="old-card-table">
               <thead>
                 <tr>
                   <th style={{width: 60, textAlign:'center'}} onClick={() => handleSort('id')} className={sortField === 'id' ? 'sorted' : ''}>ID <SortIcon field="id"/></th>
@@ -5315,15 +5316,15 @@ function OldCardInventoryTab({ showToast, supabaseConfig }) {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </ResponsiveCardTable>
             </div>
 
             {totalPages > 1 && (
-              <div style={{padding:'16px', display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'1px solid var(--border)'}}>
+              <div className="pagination" style={{padding:'16px', display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'1px solid var(--border)'}}>
                 <div style={{fontSize:13, color:'var(--text-2)'}}>
                   显示 {(page-1)*PAGE_SIZE + 1}–{Math.min(page*PAGE_SIZE, filtered.length)}，共 {filtered.length} 条
                 </div>
-                <div style={{display:'flex', gap:4}}>
+                <div className="pagination-controls" style={{display:'flex', gap:4}}>
                   <button className="btn btn-secondary" disabled={page === 1} onClick={() => setPage(p => p - 1)}>‹ 上一页</button>
                   {Array.from({length: Math.min(5, totalPages)}, (_, i) => {
                     let p = i + 1;
@@ -5355,10 +5356,31 @@ function OldCardInventoryTab({ showToast, supabaseConfig }) {
   );
 }
 
+// Keep one set of row controls and data for desktop tables and mobile cards.
+function ResponsiveCardTable({ className, children }) {
+  const labels = className === 'main-card-table'
+    ? ['选择', 'ID', '图片', '卡牌名称', '语言', '单价', '数量', '剩余', '成本', '流通品', 'PSA10', '已售', '利润', '状态', '操作']
+    : ['ID', '图片', '卡牌名称', '单价', '数量', '剩余', '成本', '已售', '利润', '状态', '操作'];
+  return <table className={className} role="table">{React.Children.map(children, section => {
+    if (!React.isValidElement(section) || section.type !== 'tbody') return section;
+    return React.cloneElement(section, {role:'rowgroup'}, React.Children.map(section.props.children, row => {
+      if (!React.isValidElement(row)) return row;
+      return React.cloneElement(row, {role:'row'}, React.Children.map(row.props.children, (cell, index) => {
+        if (!React.isValidElement(cell) || cell.props.colSpan) return cell;
+        return React.cloneElement(cell, {'data-label':labels[index], role:'cell'},
+          labels[index] === '选择'
+            ? <label className="card-selection">{cell.props.children}</label>
+            : cell.props.children);
+      }));
+    }));
+  })}</table>;
+}
+
 // Main App
 function App({ onLock }) {
   const [zoomedImage, setZoomedImage] = useState(null);
   const [activeTab, setActiveTab] = useState('main');
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const [supabaseConfig, setSupabaseConfig] = useState(() => readSupabaseConfig());
   const [items, setItems] = useState(() => {
     try {
@@ -5890,7 +5912,10 @@ function App({ onLock }) {
             </div>
             卡价管理后台 <small>卡牌库存系统</small>
           </div>
-          <div className="header-actions">
+          <button className="btn btn-secondary mobile-tools-toggle" aria-expanded={mobileToolsOpen} aria-controls="header-tools" onClick={() => setMobileToolsOpen(open => !open)}>
+            {mobileToolsOpen ? '收起工具' : '更多工具'}
+          </button>
+          <div id="header-tools" className={`header-actions ${mobileToolsOpen ? 'is-open' : ''}`}>
             <div className="header-status-pill">
               <span style={{width:8, height:8, borderRadius:'50%', background:cloudStatusColor, boxShadow:`0 0 10px ${cloudStatusColor}`}}></span>
               <span>云端{cloudStatus}</span>
@@ -6028,6 +6053,9 @@ function App({ onLock }) {
             <option value="宝可梦英文">英文</option>
           </select>
           <button className="btn btn-secondary" onClick={() => handleBulkLanguageUpdate('selected')}>应用已选 {selectedIds.length || ''}</button>
+          <button className="btn btn-secondary mobile-select-page" aria-pressed={isPageSelected} onClick={() => toggleSelectPage(!isPageSelected)}>
+            {isPageSelected ? '取消本页全选' : '全选本页'}
+          </button>
           <button className="btn btn-secondary" onClick={() => handleBulkLanguageUpdate('filtered')}>应用当前筛选 {filtered.length}</button>
           {selectedIds.length > 0 && <button className="btn btn-secondary" onClick={() => setSelectedIds([])}>清空选择</button>}
           <button className="btn btn-secondary" onClick={handleBulkMarkSigned}>批量设为待签收</button>
@@ -6051,7 +6079,7 @@ function App({ onLock }) {
       <div className="table-container">
         <div className="table-wrap">
           <div className="table-scroll">
-          <table className="main-card-table">
+          <ResponsiveCardTable className="main-card-table">
             <thead>
               <tr>
                 <th style={{width: 44, textAlign:'center'}}>
@@ -6176,16 +6204,16 @@ function App({ onLock }) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </ResponsiveCardTable>
           </div>
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div style={{padding:'16px', display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'1px solid var(--border)'}}>
+            <div className="pagination" style={{padding:'16px', display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'1px solid var(--border)'}}>
               <div style={{fontSize:13, color:'var(--text-2)'}}>
                 显示 {(page-1)*PAGE_SIZE + 1}–{Math.min(page*PAGE_SIZE, filtered.length)}，共 {filtered.length} 条
               </div>
-              <div style={{display:'flex', gap:4}}>
+              <div className="pagination-controls" style={{display:'flex', gap:4}}>
                 <button className="btn btn-secondary" disabled={page === 1} onClick={() => setPage(p => p-1)}>‹ 上一页</button>
                 {Array.from({length: Math.min(5, totalPages)}, (_, i) => {
                   let p = i + 1;

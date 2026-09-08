@@ -93,6 +93,7 @@ function Tab0754(props) {
   });
   var records = rS[0], setRecords = rS[1];
   var fileInputRef = React.useRef(null);
+  var backupFileInputRef = React.useRef(null);
   var recordsRef = React.useRef(records);
   var remoteReadyRef = React.useRef(false);
   var skipNextRemoteSaveRef = React.useRef(false);
@@ -344,6 +345,83 @@ function Tab0754(props) {
       });
   }
 
+  function save0754Blob(blob, filename, options) {
+    if (typeof saveBlobWithPicker === 'function') {
+      return saveBlobWithPicker(blob, filename, options);
+    }
+    var url = URL.createObjectURL(blob);
+    var anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+    return Promise.resolve({savedWithPicker:false});
+  }
+
+  function saveBackup() {
+    var backup = {
+      version: '1.0',
+      type: '0754-sold-records',
+      exportedAt: new Date().toISOString(),
+      records: normalize0754Records(records)
+    };
+    var blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json;charset=utf-8;'});
+    var filename = '0754售出备份_' + new Date().toISOString().slice(0, 10) + '.json';
+    save0754Blob(blob, filename, {
+      types: [{description:'JSON 文件', accept:{'application/json':['.json']}}]
+    })
+      .then(function() { showToast('0754 备份已保存 ✓'); })
+      .catch(function() { showToast('0754 备份保存失败'); });
+  }
+
+  function handleBackupFileChange(e) {
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(event) {
+      try {
+        var data = JSON.parse(event.target.result);
+        var importedRecords = Array.isArray(data) ? data : (data.records || []);
+        var normalized = normalize0754Records(importedRecords);
+        if (normalized.length === 0) {
+          showToast('0754 文件格式错误或无可导入数据');
+          return;
+        }
+        if (!confirm('将导入 ' + normalized.length + ' 条 0754 数据，当前 0754 数据将被覆盖，确定吗？')) return;
+        mark0754RecoveryComplete();
+        saveRecords(normalized);
+        showToast('0754 数据导入成功 ✓');
+      } catch (error) {
+        showToast('0754 文件解析失败');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }
+
+  function csvValue(value) {
+    return '"' + String(value === null || value === undefined ? '' : value).replace(/"/g, '""') + '"';
+  }
+
+  function exportCSV() {
+    var headers = ['ID', '日期', '金额', '创建时间'];
+    var rows = records.map(function(record) {
+      return [record.id, record.date, record.amount, record.createdAt];
+    });
+    var csv = [headers].concat(rows).map(function(row) {
+      return row.map(csvValue).join(',');
+    }).join('\n');
+    var blob = new Blob(['\ufeff' + csv], {type:'text/csv;charset=utf-8;'});
+    var filename = '0754售出_' + new Date().toISOString().slice(0, 10) + '.csv';
+    save0754Blob(blob, filename, {
+      types: [{description:'CSV 文件', accept:{'text/csv':['.csv']}}]
+    })
+      .then(function() { showToast('0754 CSV 已保存 ✓'); })
+      .catch(function() { showToast('0754 CSV 保存失败'); });
+  }
+
   function addRecord() {
     var amt = parseFloat(inputAmount);
     if (!Number.isFinite(amt) || amt === 0) return;
@@ -386,8 +464,8 @@ function Tab0754(props) {
     var list = records.slice().sort(function(a, b) {
       var av = sortField === 'date' ? (a.date || '') : (a[sortField] || '');
       var bv = sortField === 'date' ? (b.date || '') : (b[sortField] || '');
-      if (av < bv) return sortField === 'asc' ? -1 : 1;
-      if (av > bv) return sortField === 'asc' ? 1 : -1;
+      if (av < bv) return sortDir === 'asc' ? -1 : 1;
+      if (av > bv) return sortDir === 'asc' ? 1 : -1;
       return 0;
     });
     if (dateFrom) list = list.filter(function(r) { return (r.date || '') >= dateFrom; });
@@ -414,7 +492,7 @@ function Tab0754(props) {
   // ===== 构建各部分 =====
 
   // 标题栏
-  var titleBar = C('div', S('style', {display:'flex',alignItems:'center',gap:12,marginBottom:20}),
+  var titleBar = C('div', P({className:'sold-titlebar'}, S('style', {display:'flex',alignItems:'center',gap:12,marginBottom:20,flexWrap:'wrap'})),
     C('div', S('style', {fontSize:20,fontWeight:700}), '0754 \u552E\u51FA'),
     C('button', P({className:'btn btn-secondary', onClick:loadFromExcel, disabled:loading},
       S('style', {fontSize:12,padding:'4px 12px'})),
@@ -434,16 +512,32 @@ function Tab0754(props) {
       C('option', {value:'amount|desc'}, '\u91D1\u989D \u9AD8\u2192\u4F4E'),
       C('option', {value:'amount|asc'}, '\u91D1\u989D \u4F4E\u2192\u9AD8')
     ),
-    C('span', S('style', {fontSize:11,color:'var(--text-3)',marginLeft:'auto'}),
+    C('div', P({className:'sold-backup-actions'}, S('style', {display:'flex',alignItems:'center',gap:8,marginLeft:'auto',flexWrap:'wrap'})),
+      C('button', P({className:'btn btn-secondary',onClick:saveBackup},
+        S('style',{fontSize:12,padding:'6px 10px'})), '💾 保存备份'),
+      C('button', P({className:'btn btn-secondary',onClick:function() {
+        if (backupFileInputRef.current) backupFileInputRef.current.click();
+      }}, S('style',{fontSize:12,padding:'6px 10px'})), '📂 导入备份'),
+      C('input', {
+        ref:backupFileInputRef,
+        type:'file',
+        accept:'.json,application/json',
+        style:{display:'none'},
+        onChange:handleBackupFileChange
+      }),
+      C('button', P({className:'btn btn-secondary',onClick:exportCSV},
+        S('style',{fontSize:12,padding:'6px 10px'})), '📥 导出 CSV')
+    ),
+    C('span', S('style', {fontSize:11,color:'var(--text-3)'}),
       '\u5171 ', C('strong', S('style',{color:'var(--text)'}), records.length), ' \u7B14')
   );
 
   // 录入区
-  var inputArea = C('div', S('style', {background:'var(--surface-solid)',borderRadius:20,
+  var inputArea = C('div', P({className:'sold-input'}, S('style', {background:'var(--surface-solid)',borderRadius:20,
     border:'1px solid var(--border)',padding:'20px 22px',display:'flex',gap:12,
-    alignItems:'center',marginBottom:28, boxShadow:'0 18px 40px rgba(0,0,0,0.22)'}),
+    alignItems:'center',marginBottom:28, boxShadow:'0 18px 40px rgba(0,0,0,0.22)'})),
     C('span', S('style', {fontSize:13,fontWeight:600,whiteSpace:'nowrap',color:'var(--text-2)'}), '+ \u65B0\u589E'),
-    C('input', P({className:'form-input',type:'number',step:'0.01',value:inputAmount,
+    C('input', P({className:'form-input',type:'number',step:'0.01',value:inputAmount,'aria-label':'新增金额（支持负数）',
       onChange:function(e){setInputAmount(e.target.value)},placeholder:'\u91D1\u989D',
       onKeyDown:function(e){if(e.key==='Enter')addRecord();}},
       S('style',{width:140,fontSize:14}))),
@@ -452,7 +546,7 @@ function Tab0754(props) {
   );
 
   // 统计卡
-  var statsArea = C('div', S('style', {display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16,marginBottom:24}),
+  var statsArea = C('div', P({className:'sold-stats'}, S('style', {display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16,marginBottom:24})),
     C('div', {className:'stat-card green'},
       C('div', {className:'stat-label'},
         '\u552E\u51FA\u7B14\u6570',
@@ -494,17 +588,17 @@ function Tab0754(props) {
       ' \u9009\u62E9\u8D77\u6B62\u65E5\u671F\u53EF\u7B5F\u9009');
   }
 
-  var dateFilter = C('div', S('style', {
+  var dateFilter = C('div', P({className:'sold-date-filter'}, S('style', {
     background:'var(--surface-solid)', borderRadius:20, border:dateFilterBorder,
     padding:'16px 22px', display:'flex', gap:16, alignItems:'center', marginBottom:28, flexWrap:'wrap',
-    boxShadow:'0 18px 40px rgba(0,0,0,0.22)'}),
+    boxShadow:'0 18px 40px rgba(0,0,0,0.22)'})),
     C('span', S('style', {fontSize:13,fontWeight:600,whiteSpace:'nowrap',color:'var(--text-2)'}), ' \u7B5F\u9009\u65E5\u671F'),
     C('span', S('style', {fontSize:11,color:'var(--text-3)'}), '\u4ECE'),
-    C('input', P({type:'date', value:dateFrom, onChange:function(e){setDateFrom(e.target.value)}},
+    C('input', P({type:'date', 'aria-label':'开始日期', value:dateFrom, onChange:function(e){setDateFrom(e.target.value)}},
       S('style', {background:'var(--surface-3)', border:'1px solid '+fromDateBorder, borderRadius:8,
         color:'var(--text)', fontSize:12, padding:'8px 10px'}))),
     C('span', S('style', {fontSize:11,color:'var(--text-3)'}), '\u5230'),
-    C('input', P({type:'date', value:dateTo, onChange:function(e){setDateTo(e.target.value)}},
+    C('input', P({type:'date', 'aria-label':'结束日期', value:dateTo, onChange:function(e){setDateTo(e.target.value)}},
       S('style', {background:'var(--surface-3)', border:'1px solid '+toDateBorder, borderRadius:8,
         color:'var(--text)', fontSize:12, padding:'8px 10px'}))),
     clearBtnOrHint
@@ -546,7 +640,7 @@ function Tab0754(props) {
           C('td', S('style', {padding:'10px 20px',textAlign:'right',fontSize:14,fontWeight:600,fontVariantNumeric:'tabular-nums',color:rec.amount<0?'var(--red)':'var(--green)'}), fmtY(rec.amount)),
           C('td', S('style', {padding:'10px 20px',textAlign:'right',fontSize:13,fontVariantNumeric:'tabular-nums',color:'var(--text-2)'}), fmtY(cumsum)),
           C('td', S('style', {padding:'10px 20px',textAlign:'center'}),
-            C('button', P({onClick:delRec.bind(null, rec.id)},
+            C('button', P({onClick:delRec.bind(null, rec.id),className:'sold-delete',title:'删除','aria-label':'删除 ' + rec.date + ' / ' + fmtY(rec.amount)},
               S('style', {color:'var(--red)',cursor:'pointer',background:'none',border:'none',
                 fontSize:18,padding:'2px 6px',borderRadius:4,title:'\u5220\u9664'})), '\u2715'))
         )
@@ -569,8 +663,8 @@ function Tab0754(props) {
     );
   }
 
-  var tableArea = C('div', S('style', {background:'var(--surface-solid)',borderRadius:20,
-    border:'1px solid var(--border)',overflow:'hidden', boxShadow:'0 18px 40px rgba(0,0,0,0.24)'}),
+  var tableArea = C('div', P({className:'sold-table'}, S('style', {background:'var(--surface-solid)',borderRadius:20,
+    border:'1px solid var(--border)',overflow:'hidden', boxShadow:'0 18px 40px rgba(0,0,0,0.24)'})),
     C('div', S('style', {padding:'14px 20px',background:'var(--surface-3)',
       borderBottom:'1px solid var(--border)',fontSize:12,fontWeight:600,color:'var(--text-2)'}), '\u552E\u51FA\u660E\u7EC6'),
     tableContent
@@ -583,7 +677,7 @@ function Tab0754(props) {
     C('div', null, error)
   ) : null;
 
-  return C('div', S('style', {maxWidth:1400, margin:'0 auto', padding:'24px 32px 48px'}),
+  return C('div', P({className:'sold-page'}, S('style', {maxWidth:1400, margin:'0 auto', padding:'24px 32px 48px'})),
     titleBar, inputArea, statsArea, dateFilter, tableArea, errorEl
   );
 }
